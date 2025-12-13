@@ -1,0 +1,461 @@
++const SUPABASE_URL = "https://fizwoylpyaxyhqcnkenf.supabase.co";
++const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZpendveWxweWF4eWhxY25rZW5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU2NTc2NjcsImV4cCI6MjA4MTIzMzY2N30.BMBdV00VVOzjj10jf91m4PqloFFQVO_dA3djXRNPps4";
++const ADMIN_SECRET = "#Christian03";
++
++const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
++
++const state = {
++  restaurants: [],
++  markers: [],
++  admin: false,
++  lastFiltered: [],
++  yesterdayPickId: null,
++};
++
++const map = L.map("map", {
++  zoomControl: false,
++}).setView([49.1427, 9.2109], 13);
++
++L.control.zoom({ position: "bottomright" }).addTo(map);
++L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
++  attribution: "© OpenStreetMap",
++}).addTo(map);
++
++const els = {
++  startRandom: document.getElementById("start-random"),
++  openDatabase: document.getElementById("open-database"),
++  databaseView: document.getElementById("database-view"),
++  backHome: document.getElementById("back-home"),
++  resultCard: document.getElementById("result-card"),
++  resultName: document.getElementById("result-name"),
++  resultCuisine: document.getElementById("result-cuisine"),
++  resultPrice: document.getElementById("result-price"),
++  resultOpening: document.getElementById("result-opening"),
++  resultNotes: document.getElementById("result-notes"),
++  resultAddress: document.getElementById("result-address"),
++  noAlternative: document.getElementById("no-alternative"),
++  forceSelect: document.getElementById("force-select"),
++  filterCuisine: document.getElementById("filter-cuisine"),
++  filterPrice: document.getElementById("filter-price"),
++  tableBody: document.querySelector("#restaurant-table tbody"),
++  addRestaurant: document.getElementById("add-restaurant"),
++  modal: document.getElementById("modal"),
++  closeModal: document.getElementById("close-modal"),
++  form: document.getElementById("restaurant-form"),
++  formError: document.getElementById("form-error"),
++  deleteRestaurant: document.getElementById("delete-restaurant"),
++  exportJson: document.getElementById("export-json"),
++  importJson: document.getElementById("import-json"),
++  importFile: document.getElementById("import-file"),
++};
++
++const formFields = {
++  id: document.getElementById("restaurant-id"),
++  name: document.getElementById("name"),
++  address: document.getElementById("address"),
++  cuisine: document.getElementById("cuisine"),
++  price: document.getElementById("price_level"),
++  opening: document.getElementById("opening_hours"),
++  notes: document.getElementById("notes"),
++};
++
++function getBerlinDate(date = new Date()) {
++  return new Date(date.toLocaleString("en-US", { timeZone: "Europe/Berlin" }));
++}
++
++async function loadRestaurants() {
++  const { data, error } = await supabase
++    .from("restaurants")
++    .select("*")
++    .order("name", { ascending: true });
++  if (error) {
++    console.error(error);
++    return;
++  }
++  state.restaurants = data || [];
++  renderFilters();
++  renderTable();
++  renderMap();
++}
++
++function renderFilters() {
++  const cuisines = Array.from(
++    new Set(state.restaurants.map((r) => r.cuisine).filter(Boolean))
++  ).sort();
++  els.filterCuisine.innerHTML = '<option value="all">Alle</option>' +
++    cuisines.map((c) => `<option value="${c}">${c}</option>`).join("");
++}
++
++function renderMap() {
++  state.markers.forEach((m) => m.remove());
++  state.markers = [];
++
++  const bounds = [];
++  state.restaurants.forEach((r) => {
++    if (r.lat && r.lng) {
++      const marker = L.marker([r.lat, r.lng]).addTo(map);
++      marker.bindPopup(`<strong>${r.name}</strong><br>${r.cuisine || ""}<br>${priceLabel(r.price_level)}`);
++      state.markers.push(marker);
++      bounds.push([r.lat, r.lng]);
++    }
++  });
++
++  if (bounds.length) {
++    map.fitBounds(bounds, { padding: [30, 30] });
++  } else {
++    map.setView([49.1427, 9.2109], 13);
++  }
++}
++
++function priceLabel(level) {
++  if (!level) return "";
++  return "€".repeat(level);
++}
++
++function applyFilters() {
++  const cuisine = els.filterCuisine.value;
++  const price = els.filterPrice.value;
++  const filtered = state.restaurants.filter((r) => {
++    const matchCuisine = cuisine === "all" || r.cuisine === cuisine;
++    const matchPrice = price === "all" || (r.price_level || 0) <= Number(price);
++    return matchCuisine && matchPrice;
++  });
++  state.lastFiltered = filtered;
++  return filtered;
++}
++
++function showResult(r) {
++  if (!r) return;
++  els.resultName.textContent = r.name;
++  els.resultCuisine.textContent = r.cuisine || "Küche unbekannt";
++  els.resultPrice.textContent = priceLabel(r.price_level) || "-";
++  els.resultOpening.textContent = r.opening_hours || "Keine Angabe";
++  els.resultNotes.textContent = r.notes || "";
++  els.resultAddress.textContent = r.address;
++  els.resultCard.classList.remove("hidden");
++  els.noAlternative.classList.add("hidden");
++  els.forceSelect.classList.add("hidden");
++}
++
++async function fetchYesterdayPick() {
++  const nowBerlin = getBerlinDate();
++  const startToday = new Date(nowBerlin);
++  startToday.setHours(0, 0, 0, 0);
++  const startYesterday = new Date(startToday);
++  startYesterday.setDate(startToday.getDate() - 1);
++
++  const { data, error } = await supabase
++    .from("picks")
++    .select("restaurant_id, picked_at")
++    .gte("picked_at", startYesterday.toISOString())
++    .lt("picked_at", startToday.toISOString())
++    .order("picked_at", { ascending: false })
++    .limit(1);
++
++  if (error) {
++    console.error(error);
++    return null;
++  }
++  return data && data.length ? data[0].restaurant_id : null;
++}
++
++async function pickRandom(force = false) {
++  const filtered = applyFilters();
++  if (!filtered.length) {
++    els.resultCard.classList.add("hidden");
++    alert("Keine Restaurants für diese Filter gefunden.");
++    return;
++  }
++
++  if (!force) {
++    state.yesterdayPickId = await fetchYesterdayPick();
++  }
++
++  const candidates = force
++    ? filtered
++    : filtered.filter((r) => r.id !== state.yesterdayPickId);
++
++  if (!candidates.length && filtered.length) {
++    els.noAlternative.textContent =
++      "Kein alternatives Restaurant verfügbar (gestern bereits gewählt).";
++    els.noAlternative.classList.remove("hidden");
++    els.forceSelect.classList.remove("hidden");
++    els.resultCard.classList.remove("hidden");
++    return;
++  }
++
++  const choice = candidates[Math.floor(Math.random() * candidates.length)];
++  showResult(choice);
++  await supabase.from("picks").insert({ restaurant_id: choice.id });
++}
++
++function renderTable() {
++  const tbody = els.tableBody;
++  tbody.innerHTML = "";
++  state.restaurants.forEach((r) => {
++    const tr = document.createElement("tr");
++    tr.innerHTML = `
++      <td>${r.name}</td>
++      <td>${r.cuisine || ""}</td>
++      <td>${priceLabel(r.price_level)}</td>
++      <td>${r.opening_hours || ""}</td>
++      <td>${r.notes || ""}</td>
++      <td>${r.address}</td>
++      <td class="admin-only ${state.admin ? "" : "hidden"}">
++        <button class="btn ghost" data-action="edit">Bearbeiten</button>
++        <button class="btn ghost" data-action="delete">Löschen</button>
++      </td>`;
++    tr.dataset.id = r.id;
++    tbody.appendChild(tr);
++  });
++}
++
++function toggleAdmin() {
++  const params = new URLSearchParams(window.location.search);
++  state.admin = params.get("admin") === ADMIN_SECRET;
++  document.querySelectorAll(".admin-only").forEach((el) => {
++    el.classList.toggle("hidden", !state.admin);
++  });
++}
++
++function showModal(mode = "add", restaurant = null) {
++  els.form.reset();
++  formFields.id.value = restaurant ? restaurant.id : "";
++  formFields.name.value = restaurant?.name || "";
++  formFields.address.value = restaurant?.address || "";
++  formFields.cuisine.value = restaurant?.cuisine || "";
++  formFields.price.value = restaurant?.price_level || "";
++  formFields.opening.value = restaurant?.opening_hours || "";
++  formFields.notes.value = restaurant?.notes || "";
++  document.getElementById("modal-title").textContent =
++    mode === "add" ? "Restaurant hinzufügen" : "Restaurant bearbeiten";
++  els.deleteRestaurant.classList.toggle("hidden", mode === "add" || !state.admin);
++  els.modal.classList.remove("hidden");
++}
++
++function hideModal() {
++  els.modal.classList.add("hidden");
++  els.formError.classList.add("hidden");
++  els.formError.textContent = "";
++}
++
++async function geocodeAddress(address) {
++  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
++    address
++  )}`;
++  const res = await fetch(url, { headers: { "Accept-Language": "de" } });
++  if (!res.ok) throw new Error("Geocoding fehlgeschlagen");
++  const json = await res.json();
++  if (!json.length) {
++    throw new Error("Adresse nicht gefunden. Bitte präziser eingeben.");
++  }
++  return { lat: Number(json[0].lat), lng: Number(json[0].lon) };
++}
++
++async function saveRestaurant(event) {
++  event.preventDefault();
++  els.formError.classList.add("hidden");
++  const id = formFields.id.value;
++  const name = formFields.name.value.trim();
++  const address = formFields.address.value.trim();
++  if (!name || !address) {
++    els.formError.textContent = "Name und Adresse sind Pflichtfelder.";
++    els.formError.classList.remove("hidden");
++    return;
++  }
++
++  const current = state.restaurants.find((r) => r.id === id);
++  let coords = { lat: current?.lat || null, lng: current?.lng || null };
++  if (!current || current.address !== address) {
++    try {
++      coords = await geocodeAddress(address);
++    } catch (e) {
++      els.formError.textContent = e.message;
++      els.formError.classList.remove("hidden");
++      return;
++    }
++  }
++
++  const payload = {
++    name,
++    address,
++    cuisine: formFields.cuisine.value.trim() || null,
++    price_level: formFields.price.value ? Number(formFields.price.value) : null,
++    opening_hours: formFields.opening.value.trim() || null,
++    notes: formFields.notes.value.trim() || null,
++    lat: coords.lat,
++    lng: coords.lng,
++  };
++
++  let error;
++  if (id) {
++    ({ error } = await supabase.from("restaurants").update(payload).eq("id", id));
++  } else {
++    ({ error } = await supabase.from("restaurants").insert(payload));
++  }
++
++  if (error) {
++    els.formError.textContent = error.message;
++    els.formError.classList.remove("hidden");
++    return;
++  }
++
++  hideModal();
++  await loadRestaurants();
++}
++
++async function removeRestaurant() {
++  const id = formFields.id.value;
++  if (!id) return;
++  if (!confirm("Dieses Restaurant wirklich löschen?")) return;
++  const { error } = await supabase.from("restaurants").delete().eq("id", id);
++  if (error) {
++    els.formError.textContent = error.message;
++    els.formError.classList.remove("hidden");
++    return;
++  }
++  hideModal();
++  await loadRestaurants();
++}
++
++function showDatabaseView() {
++  document.querySelector("main").classList.add("hidden");
++  els.databaseView.classList.remove("hidden");
++}
++
++function showHome() {
++  els.databaseView.classList.add("hidden");
++  document.querySelector("main").classList.remove("hidden");
++}
++
++function setUpTableActions() {
++  els.tableBody.addEventListener("click", (e) => {
++    const btn = e.target.closest("button");
++    if (!btn) return;
++    const tr = e.target.closest("tr");
++    const id = tr.dataset.id;
++    const restaurant = state.restaurants.find((r) => r.id === id);
++    if (btn.dataset.action === "edit") {
++      showModal("edit", restaurant);
++    }
++    if (btn.dataset.action === "delete" && state.admin) {
++      formFields.id.value = id;
++      removeRestaurant();
++    }
++  });
++}
++
++function setupImportExport() {
++  els.exportJson.addEventListener("click", () => {
++    const blob = new Blob([JSON.stringify(state.restaurants, null, 2)], {
++      type: "application/json",
++    });
++    const link = document.createElement("a");
++    link.href = URL.createObjectURL(blob);
++    link.download = "restaurants.json";
++    link.click();
++  });
++
++  els.importJson.addEventListener("click", () => {
++    if (!state.admin) return;
++    els.importFile.click();
++  });
++
++  els.importFile.addEventListener("change", async (e) => {
++    const file = e.target.files?.[0];
++    if (!file) return;
++    const text = await file.text();
++    let data;
++    try {
++      data = JSON.parse(text);
++    } catch (err) {
++      alert("Ungültige JSON-Datei.");
++      return;
++    }
++    if (!Array.isArray(data)) {
++      alert("JSON muss ein Array sein.");
++      return;
++    }
++    const mode = prompt("Import-Modus: 'add' (hinzufügen) oder 'replace' (ersetzen)?", "add");
++    if (!mode) return;
++
++    if (mode === "replace") {
++      await supabase.from("restaurants").delete().neq("id", "00000000-0000-0000-0000-000000000000");
++    }
++
++    const existing = new Set(
++      state.restaurants.map((r) => `${r.name}@@${r.address}`)
++    );
++
++    const payload = data
++      .filter((r) => r.name && r.address)
++      .filter((r) => {
++        const key = `${r.name}@@${r.address}`;
++        if (existing.has(key)) return false;
++        existing.add(key);
++        return true;
++      })
++      .map((r) => ({
++        name: r.name,
++        address: r.address,
++        cuisine: r.cuisine || null,
++        price_level: r.price_level || null,
++        opening_hours: r.opening_hours || null,
++        notes: r.notes || null,
++        lat: r.lat || null,
++        lng: r.lng || null,
++      }));
++
++    if (!payload.length) {
++      alert("Keine neuen Einträge importiert.");
++      return;
++    }
++
++    const { error } = await supabase.from("restaurants").insert(payload);
++    if (error) {
++      alert(error.message);
++      return;
++    }
++    await loadRestaurants();
++    alert("Import abgeschlossen.");
++  });
++}
++
++function setupFilters() {
++  els.filterCuisine.addEventListener("change", applyFilters);
++  els.filterPrice.addEventListener("change", applyFilters);
++}
++
++function setupRandom() {
++  els.startRandom.addEventListener("click", () => pickRandom());
++  els.forceSelect.addEventListener("click", () => pickRandom(true));
++}
++
++function setupNavigation() {
++  els.openDatabase.addEventListener("click", showDatabaseView);
++  els.backHome.addEventListener("click", showHome);
++}
++
++function setupModalControls() {
++  els.addRestaurant.addEventListener("click", () => showModal("add"));
++  els.closeModal.addEventListener("click", hideModal);
++  els.form.addEventListener("submit", saveRestaurant);
++  els.deleteRestaurant.addEventListener("click", removeRestaurant);
++}
++
++async function init() {
++  toggleAdmin();
++  setupFilters();
++  setupRandom();
++  setupNavigation();
++  setupModalControls();
++  setUpTableActions();
++  setupImportExport();
++  await loadRestaurants();
++  applyFilters();
++}
++
++init();
+ 
+EOF
+)
