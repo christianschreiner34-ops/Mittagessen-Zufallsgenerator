@@ -1,1 +1,141 @@
-Hello
++<!DOCTYPE html>
++<html lang="de">
++<head>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>Lunch-Los – Restaurant-Zufallsgenerator</title>
++  <link rel="stylesheet" href="styles.css" />
++  <link
++    rel="stylesheet"
++    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
++    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
++    crossorigin=""
++  />
++</head>
++<body>
++  <header class="app-header">
++    <h1>Lunch-Los</h1>
++    <p class="subtitle">Gemeinsam das nächste Mittagessen finden</p>
++  </header>
++
++  <main class="layout">
++    <section class="panel left">
++      <div class="actions">
++        <button id="start-random" class="btn primary">Zufallsgenerator starten</button>
++        <button id="open-database" class="btn ghost">Datenbank öffnen</button>
++      </div>
++
++      <div id="result-card" class="card hidden">
++        <div class="card-header">
++          <div>
++            <h2 id="result-name"></h2>
++            <p id="result-cuisine" class="muted"></p>
++          </div>
++          <span id="result-price" class="pill"></span>
++        </div>
++        <dl class="details">
++          <div>
++            <dt>Öffnungszeiten</dt>
++            <dd id="result-opening"></dd>
++          </div>
++          <div>
++            <dt>Notizen</dt>
++            <dd id="result-notes"></dd>
++          </div>
++          <div>
++            <dt>Adresse</dt>
++            <dd id="result-address"></dd>
++          </div>
++        </dl>
++        <div class="result-actions">
++          <p id="no-alternative" class="muted hidden"></p>
++          <button id="force-select" class="btn ghost hidden">Trotzdem auswählen</button>
++        </div>
++      </div>
++
++      <div class="filters card">
++        <div class="filter-group">
++          <label for="filter-cuisine">Küche</label>
++          <select id="filter-cuisine"></select>
++        </div>
++        <div class="filter-group">
++          <label for="filter-price">Max-Preis</label>
++          <select id="filter-price">
++            <option value="all">Alle</option>
++            <option value="1">€</option>
++            <option value="2">€€</option>
++            <option value="3">€€€</option>
++          </select>
++        </div>
++      </div>
++    </section>
++
++    <section class="panel right">
++      <div id="map" class="map"></div>
++    </section>
++  </main>
++
++  <section id="database-view" class="hidden">
++    <div class="db-header">
++      <h2>Datenbank</h2>
++      <div class="db-actions">
++        <button id="back-home" class="btn ghost">Zurück</button>
++        <button id="export-json" class="btn ghost">Export JSON</button>
++        <button id="import-json" class="btn ghost admin-only hidden">Import JSON</button>
++        <button id="add-restaurant" class="btn primary">+ Restaurant hinzufügen</button>
++      </div>
++    </div>
++    <div class="table-container card">
++      <table id="restaurant-table">
++        <thead>
++          <tr>
++            <th>Name</th>
++            <th>Küche</th>
++            <th>Preis</th>
++            <th>Öffnungszeiten</th>
++            <th>Notizen</th>
++            <th>Adresse</th>
++            <th class="admin-only hidden">Aktionen</th>
++          </tr>
++        </thead>
++        <tbody></tbody>
++      </table>
++    </div>
++  </section>
++
++  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
++    <div class="modal-content card">
++      <div class="modal-header">
++        <h3 id="modal-title">Restaurant</h3>
++        <button id="close-modal" class="btn ghost">Schließen</button>
++      </div>
++      <form id="restaurant-form">
++        <input type="hidden" id="restaurant-id" />
++        <div class="form-grid">
++          <label>Name*<input type="text" id="name" required /></label>
++          <label>Adresse*<input type="text" id="address" required /></label>
++          <label>Küche<input type="text" id="cuisine" /></label>
++          <label>Preis (1–3)<input type="number" id="price_level" min="1" max="3" /></label>
++          <label>Öffnungszeiten<textarea id="opening_hours"></textarea></label>
++          <label>Notizen<textarea id="notes"></textarea></label>
++        </div>
++        <p id="form-error" class="error hidden"></p>
++        <div class="modal-actions">
++          <button type="submit" class="btn primary">Speichern</button>
++          <button type="button" id="delete-restaurant" class="btn ghost admin-only hidden">Löschen</button>
++        </div>
++      </form>
++    </div>
++  </div>
++
++  <input type="file" id="import-file" accept="application/json" class="hidden" />
++
++  <script
++    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
++    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
++    crossorigin=""
++  ></script>
++  <script src="https://unpkg.com/@supabase/supabase-js@2.45.3/dist/umd/supabase.min.js"></script>
++  <script src="app.js"></script>
++</body>
++</html>
