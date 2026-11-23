@@ -341,11 +341,18 @@ function drawWheel(list, winnerId = null) {
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// Während das Rad dreht, lassen sich Filter und Zusagen nicht ändern,
+// sonst passt das gezeigte Rad nicht mehr zu dem, was gezogen wird.
+function lockFilters(on) {
+  document.querySelectorAll(".filters select, .filters button, .filters input, #join, #me-veg").forEach((el) => (el.disabled = on));
+}
+
 $("spin").addEventListener("click", () => {
   const { list } = candidates();
   if (!list.length || state.spinning) return;
   state.spinning = true;
   $("spin").disabled = true;
+  lockFilters(true);
 
   const winner = Math.floor(Math.random() * list.length);
   const seg = (Math.PI * 2) / list.length;
@@ -375,6 +382,7 @@ async function finish(rest, list) {
   drawWheel(list, rest.id);
   const { data, error } = await db.from("picks").insert({ restaurant_id: rest.id }).select().single();
   state.spinning = false;
+  lockFilters(false);
   if (error) {
     $("verdict-kicker").textContent = "Die Ziehung ließ sich nicht speichern. Bitte noch mal drehen.";
     $("spin").disabled = false;

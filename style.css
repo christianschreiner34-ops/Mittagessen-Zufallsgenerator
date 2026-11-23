@@ -360,3 +360,4 @@ dialog h2 { margin-bottom: 20px; }
   .inline-form > * { flex-basis: 100%; }
   .inline-form .btn { width: 100%; }
 }
+.filters :disabled, #me-veg:disabled { cursor: default; opacity: .55; }
