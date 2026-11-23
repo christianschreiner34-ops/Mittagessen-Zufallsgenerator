@@ -15,6 +15,8 @@ const state = {
   attendance: [], // E-Mails, die heute dabei sind
   vetoes: [],
   favorites: [], // {email, restaurant_id}
+  ratings: [], // {pick_id, email, thumbs}
+  attendanceWeek: [], // {day, email} seit Montag
   weather: null, // { rainy, text }
   rotation: 0,
   spinning: false,
@@ -121,20 +123,23 @@ async function start(session) {
 // ---------- Daten ----------
 
 async function loadAll() {
-  const [r, p, m, a, v, f] = await Promise.all([
+  const [r, p, m, a, v, f, rt] = await Promise.all([
     db.from("restaurants").select("*").order("name"),
     db.from("picks").select("*").order("created_at", { ascending: false }).limit(300),
     db.from("members").select("*").order("email"),
-    db.from("attendance").select("email").eq("day", todayBerlin()),
+    db.from("attendance").select("day, email").gte("day", weekStartBerlin()),
     db.from("vetoes").select("*").order("created_at", { ascending: false }).limit(300),
     db.from("favorites").select("email, restaurant_id"),
+    db.from("ratings").select("pick_id, email, thumbs").limit(5000),
   ]);
   state.restaurants = r.data || [];
   state.picks = p.data || [];
   state.members = m.data || [];
-  state.attendance = (a.data || []).map((x) => x.email);
+  state.attendanceWeek = a.data || [];
+  state.attendance = state.attendanceWeek.filter((x) => x.day === todayBerlin()).map((x) => x.email);
   state.vetoes = v.data || [];
   state.favorites = f.data || [];
+  state.ratings = rt.data || [];
 }
 
 function renderAll() {
@@ -433,6 +438,7 @@ async function refreshToday() {
   if (a.error || m.error || p.error || v.error || f.error) return;
   state.favorites = f.data;
   state.attendance = a.data.map((x) => x.email);
+  state.attendanceWeek = state.attendanceWeek.filter((x) => x.day !== today).concat(a.data.map((x) => ({ day: today, email: x.email })));
   state.members = m.data;
   state.picks = p.data.concat(state.picks.filter((x) => x.pick_date !== today));
   state.vetoes = v.data;
@@ -518,6 +524,8 @@ function renderToday(fresh = false) {
   const name = $("verdict-name");
   const box = $("verdict");
   renderVeto(pick);
+  $("friday-hint").classList.toggle("hidden", weekdayBerlin() !== 5);
+  $("rate-today").classList.add("hidden");
   if (!r) {
     box.classList.remove("decided");
     const lastVeto = state.picks.find((p) => p.pick_date === today && isVetoed(p));
@@ -552,6 +560,10 @@ function renderToday(fresh = false) {
   $("verdict-links").innerHTML = links.join(" oder ");
   // Ist entschieden, wird nur noch per Joker neu gedreht
   $("spin").classList.add("hidden");
+  // ab 13 Uhr nach dem Essen fragen
+  const afterLunch = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", hour: "2-digit", hourCycle: "h23" }).format(new Date())) >= 13;
+  $("rate-today").classList.toggle("hidden", !afterLunch);
+  if (afterLunch) $("rate-today-btns").innerHTML = thumbsHtml(pick.id);
 }
 
 // ---------- Wetter-Modus (Open-Meteo, kostenlos, ohne Schlüssel) ----------
@@ -590,6 +602,54 @@ async function loadWeather() {
     // ohne Wetter geht es auch
   }
 }
+
+// ---------- Daumen hoch oder runter ----------
+
+const THUMB = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v10H4V10h3zm0 0l4-7c1.7 0 2.6 1.2 2.2 2.8L12.6 9H19a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/></svg>';
+
+function myThumb(pickId) {
+  return state.ratings.find((x) => x.pick_id === pickId && x.email === state.email)?.thumbs || 0;
+}
+
+function thumbCounts(pickIds) {
+  const set = new Set(pickIds);
+  let up = 0, down = 0;
+  for (const x of state.ratings) if (set.has(x.pick_id)) x.thumbs > 0 ? up++ : down++;
+  return { up, down };
+}
+
+function thumbsHtml(pickId) {
+  const mine = myThumb(pickId);
+  const { up, down } = thumbCounts([pickId]);
+  return `<span class="thumbs">
+    <button class="btn btn--plain btn--small thumb" data-rate="${pickId}" data-v="1" aria-pressed="${mine === 1}" aria-label="Daumen hoch">${THUMB}<span>${up || ""}</span></button>
+    <button class="btn btn--plain btn--small thumb down" data-rate="${pickId}" data-v="-1" aria-pressed="${mine === -1}" aria-label="Daumen runter">${THUMB}<span>${down || ""}</span></button>
+  </span>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-rate]");
+  if (!b) return;
+  const pickId = Number(b.dataset.rate);
+  const v = Number(b.dataset.v);
+  const mine = myThumb(pickId);
+  b.disabled = true;
+  // gleicher Daumen noch mal = zurücknehmen
+  const { error } = mine === v
+    ? await db.from("ratings").delete().eq("pick_id", pickId).eq("email", state.email)
+    : await db.from("ratings").upsert({ pick_id: pickId, thumbs: v, email: state.email });
+  b.disabled = false;
+  if (error) return alert("Hat nicht geklappt: " + error.message);
+  state.ratings = state.ratings.filter((x) => !(x.pick_id === pickId && x.email === state.email));
+  if (mine !== v) state.ratings.push({ pick_id: pickId, email: state.email, thumbs: v });
+  renderToday();
+  renderHistory();
+});
+
+$("to-week").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.querySelector('.tab[data-tab="verlauf"]').click();
+});
 
 // ---------- Veto-Joker: einer pro Person und Woche ----------
 
@@ -658,6 +718,9 @@ $("join").addEventListener("click", async () => {
   $("join").disabled = false;
   if (error && error.code !== "23505") return alert("Hat nicht geklappt: " + error.message);
   state.attendance = inCrew ? state.attendance.filter((e) => e !== state.email) : [...state.attendance, state.email];
+  const t = todayBerlin();
+  state.attendanceWeek = state.attendanceWeek.filter((x) => !(x.day === t && x.email === state.email));
+  if (!inCrew) state.attendanceWeek.push({ day: t, email: state.email });
   renderCrew();
   renderWheel();
 });
@@ -806,7 +869,8 @@ function renderHistory() {
             .map((x) => `${nameOf(state.vetoes.find((v) => v.pick_id === x.id).email)} gegen ${byId[x.restaurant_id]?.name || "gelöscht"}`);
           return `<div class="item"><div class="main"><div class="title">${esc(byId[p.restaurant_id]?.name || "gelöscht")}</div>
           <div class="sub">${formatDate(p.pick_date)} · gedreht von ${esc(nameOf(p.picked_by))}${jokers.length ? ` · Joker: ${esc(jokers.join(", "))}` : ""}</div></div>
-          ${state.admin ? `<button class="btn btn--plain btn--small btn--destructive" data-undo="${p.id}">Entfernen</button>` : ""}</div>`;
+          <div class="actions">${thumbsHtml(p.id)}
+          ${state.admin ? `<button class="btn btn--plain btn--small btn--destructive" data-undo="${p.id}">Entfernen</button>` : ""}</div></div>`;
         })
         .join("")
     : '<p class="muted">Noch nicht gedreht.</p>';
@@ -827,6 +891,64 @@ function renderHistory() {
   $("stats").innerHTML = top.length
     ? top.map(([id, n]) => `<div class="item"><div class="main">${esc(byId[id]?.name || "gelöscht")}</div><span class="count">${n}-mal</span></div>`).join("")
     : '<p class="muted">Noch keine Daten.</p>';
+
+  renderRanking(byId);
+  renderWeek(byId);
+}
+
+// Rangliste: alle gültigen Ziehungen eines Ladens, Daumen hoch minus runter
+function renderRanking(byId) {
+  const picksBy = {};
+  state.picks.filter((p) => !isVetoed(p)).forEach((p) => (picksBy[p.restaurant_id] ||= []).push(p.id));
+  const rows = Object.entries(picksBy)
+    .map(([id, ids]) => ({ id, ...thumbCounts(ids) }))
+    .filter((x) => x.up + x.down > 0)
+    .sort((a, b) => b.up - b.down - (a.up - a.down) || b.up - a.up);
+  $("ranking").innerHTML = rows.length
+    ? rows
+        .map(
+          (x, i) => `<div class="item"><div class="main"><div class="title">${i + 1}. ${esc(byId[x.id]?.name || "gelöscht")}</div>
+          <div class="sub">${x.up}-mal Daumen hoch, ${x.down}-mal runter</div></div><span class="count">${x.up - x.down > 0 ? "+" : ""}${x.up - x.down}</span></div>`
+        )
+        .join("")
+    : '<p class="muted">Noch keine Bewertungen. Nach dem Essen auf Daumen hoch oder runter tippen.</p>';
+}
+
+// Wochenrückblick ab Montag. Kosten grob nach Preisstufe geschätzt.
+const PRICE_EUR = { 1: 10, 2: 15, 3: 22 };
+function renderWeek(byId) {
+  const ws = weekStartBerlin();
+  const seen = new Set();
+  const days = state.picks
+    .filter((p) => p.pick_date >= ws && !isVetoed(p) && !seen.has(p.pick_date) && seen.add(p.pick_date))
+    .reverse();
+  const box = $("week");
+  if (!days.length) {
+    box.innerHTML = "";
+    box.classList.add("hidden");
+    return;
+  }
+  box.classList.remove("hidden");
+  const perHead = days.reduce((s, p) => s + (PRICE_EUR[byId[p.restaurant_id]?.price] || 0), 0);
+  const unknown = days.filter((p) => !byId[p.restaurant_id]?.price).length;
+  const heads = state.attendanceWeek.length;
+  let best = null;
+  for (const p of days) {
+    const c = thumbCounts([p.id]);
+    const score = c.up - c.down;
+    if (c.up > 0 && (!best || score > best.score)) best = { p, score };
+  }
+  const friday = weekdayBerlin() >= 5;
+  box.innerHTML = `
+    <p class="label">${friday ? "Wochenrückblick" : "Diese Woche bisher"}</p>
+    <h2>${best ? `Favorit der Woche: ${esc(byId[best.p.restaurant_id]?.name || "gelöscht")}` : `${days.length} ${days.length === 1 ? "Mittag" : "Mittage"} entschieden`}</h2>
+    <div class="week-grid">
+      <div><span class="num">${days.length}</span><span class="cap">${days.length === 1 ? "Tag" : "Tage"} essen gegangen</span></div>
+      <div><span class="num">${perHead ? "ca. " + perHead + " €" : "–"}</span><span class="cap">pro Kopf ausgegeben</span></div>
+      <div><span class="num">${heads || "–"}</span><span class="cap">Zusagen mit „Bin dabei“</span></div>
+    </div>
+    <ol>${days.map((p) => `<li>${formatDate(p.pick_date)}: ${esc(byId[p.restaurant_id]?.name || "gelöscht")}</li>`).join("")}</ol>
+    <p class="small-note">Kosten geschätzt nach Preisstufe (€ 10 €, €€ 15 €, €€€ 22 €)${unknown ? `, ${unknown} ${unknown === 1 ? "Tag" : "Tage"} ohne Preisangabe` : ""}.</p>`;
 }
 
 // ---------- Kollegen (Admin) ----------

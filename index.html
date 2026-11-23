@@ -58,6 +58,11 @@
             <button id="quick-add" class="btn btn--secondary">Restaurant eintragen</button>
           </div>
           <p id="veto-info" class="f-info"></p>
+          <div id="rate-today" class="rate-today hidden">
+            <span>Wie war's?</span>
+            <span id="rate-today-btns"></span>
+          </div>
+          <p id="friday-hint" class="f-info hidden">Es ist Freitag: Der <a href="#" id="to-week">Wochenrückblick</a> wartet.</p>
           <p id="f-info" class="f-info"></p>
         </div>
 
@@ -125,8 +130,12 @@
 
     <!-- Verlauf -->
     <section id="tab-verlauf" class="tab-page hidden">
+      <div id="week" class="week"></div>
       <h2>Verlauf</h2>
       <div id="history" class="list"></div>
+      <h2>Rangliste</h2>
+      <p class="muted lead">Nach euren Daumen. Wer nach dem Essen bewertet, verändert die Reihenfolge.</p>
+      <div id="ranking" class="list"></div>
       <h2>Am häufigsten</h2>
       <div id="stats" class="list"></div>
     </section>

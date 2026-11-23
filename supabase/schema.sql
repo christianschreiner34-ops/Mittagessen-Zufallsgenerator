@@ -148,3 +148,22 @@ create policy "Selbst entfernen" on public.favorites for delete to authenticated
 create index if not exists favorites_restaurant_idx on public.favorites(restaurant_id);
 grant select, insert, delete on public.favorites to authenticated;
 revoke all on public.favorites from anon;
+
+-- ---------- Paket 3: Daumen hoch oder runter (2026-11-23) ----------
+create table if not exists public.ratings (
+  pick_id bigint not null references public.picks(id) on delete cascade,
+  email text not null default public.my_email() references public.members(email) on delete cascade on update cascade,
+  thumbs smallint not null check (thumbs in (-1, 1)),
+  created_at timestamptz not null default now(),
+  primary key (pick_id, email)
+);
+alter table public.ratings enable row level security;
+create policy "Mitglieder lesen" on public.ratings for select to authenticated using ((select public.is_member()));
+create policy "Selbst bewerten" on public.ratings for insert to authenticated
+  with check ((select public.is_member()) and email = (select public.my_email()));
+create policy "Selbst ändern" on public.ratings for update to authenticated
+  using (email = (select public.my_email())) with check (email = (select public.my_email()));
+create policy "Selbst zurücknehmen" on public.ratings for delete to authenticated
+  using (email = (select public.my_email()));
+grant select, insert, update, delete on public.ratings to authenticated;
+revoke all on public.ratings from anon;

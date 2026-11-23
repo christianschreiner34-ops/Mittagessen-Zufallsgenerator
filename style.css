@@ -282,6 +282,29 @@ fieldset.days label.check { margin: 0; }
 .fav[aria-pressed="true"] svg { fill: currentColor; }
 .item .actions { display: flex; align-items: center; gap: 4px; }
 
+/* Daumen */
+.thumbs { display: inline-flex; gap: 4px; align-items: center; }
+.thumb { min-width: 44px; padding: 0 10px; gap: 6px; color: var(--muted); }
+.thumb svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.thumb[aria-pressed="true"] { color: var(--accent-text); }
+.thumb[aria-pressed="true"] svg { fill: currentColor; }
+.thumb.down svg { transform: rotate(180deg); }
+.rate-today { display: flex; align-items: center; gap: 12px; margin-top: 16px; font-size: 16px; }
+.verdict.decided .thumb { color: rgba(255,255,255,.75); }
+.verdict.decided .thumb[aria-pressed="true"] { color: #ffffff; }
+.lead { margin: -12px 0 16px; font-size: 15px; }
+
+/* Wochenrückblick */
+.week { background: var(--accent); color: var(--accent-ink); border-radius: var(--r-lg); padding: 28px; margin-bottom: 48px; }
+.week h2 { margin-bottom: 4px; }
+.week .label { color: color-mix(in srgb, var(--accent-ink) 78%, var(--accent)); }
+.week-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.week-grid .num { font-size: 32px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; display: block; }
+.week-grid .cap { font-size: 14px; color: color-mix(in srgb, var(--accent-ink) 78%, var(--accent)); }
+.week ol { margin: 0; padding-left: 20px; font-size: 16px; }
+.week .small-note { margin: 12px 0 0; font-size: 14px; color: color-mix(in srgb, var(--accent-ink) 70%, var(--accent)); }
+@media (max-width: 640px) { .week { padding: 22px 20px; } .week-grid { grid-template-columns: 1fr 1fr; } }
+
 /* Einstieg: einmal beim Laden, danach steht alles */
 @media (prefers-reduced-motion: no-preference) {
   [data-enter] > * { animation: enter 700ms var(--ease-enter) both; }
