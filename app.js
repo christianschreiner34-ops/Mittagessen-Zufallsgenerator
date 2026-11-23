@@ -42,8 +42,12 @@ function weekStartBerlin() {
 }
 
 const isVetoed = (pick) => state.vetoes.some((v) => v.pick_id === pick.id);
-// Die Ziehung, die für einen Tag gilt: die letzte, gegen die kein Joker eingesetzt wurde
-const validPickOn = (day) => state.picks.find((p) => p.pick_date === day && !isVetoed(p));
+// Die Ziehung, die für einen Tag gilt: die letzte des Tages. Wurde gegen sie ein Joker
+// eingesetzt, ist der Tag wieder offen (ältere, verworfene Ziehungen zählen nicht).
+const validPickOn = (day) => {
+  const last = state.picks.find((p) => p.pick_date === day);
+  return last && !isVetoed(last) ? last : undefined;
+};
 
 function formatDate(iso) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -347,11 +351,37 @@ function lockFilters(on) {
   document.querySelectorAll(".filters select, .filters button, .filters input, #join, #me-veg").forEach((el) => (el.disabled = on));
 }
 
-$("spin").addEventListener("click", () => {
-  const { list } = candidates();
-  if (!list.length || state.spinning) return;
+// Vor dem Drehen den Stand der anderen holen: wer dabei ist, wer vegetarisch isst,
+// und ob inzwischen schon jemand gedreht hat.
+async function refreshToday() {
+  const today = todayBerlin();
+  const [a, m, p, v] = await Promise.all([
+    db.from("attendance").select("email").eq("day", today),
+    db.from("members").select("*").order("email"),
+    db.from("picks").select("*").eq("pick_date", today).order("created_at", { ascending: false }),
+    db.from("vetoes").select("*").order("created_at", { ascending: false }).limit(300),
+  ]);
+  if (a.error || m.error || p.error || v.error) return;
+  state.attendance = a.data.map((x) => x.email);
+  state.members = m.data;
+  state.picks = p.data.concat(state.picks.filter((x) => x.pick_date !== today));
+  state.vetoes = v.data;
+  renderCrew();
+  renderToday();
+  renderWheel();
+}
+
+$("spin").addEventListener("click", async () => {
+  if (state.spinning) return;
   state.spinning = true;
   $("spin").disabled = true;
+  await refreshToday();
+  const { list } = candidates();
+  if (!list.length || validPickOn(todayBerlin())) {
+    state.spinning = false;
+    renderWheel();
+    return;
+  }
   lockFilters(true);
 
   const winner = Math.floor(Math.random() * list.length);
@@ -629,7 +659,11 @@ function renderHistory() {
   const byId = Object.fromEntries(state.restaurants.map((r) => [r.id, r]));
   // pro Tag nur die letzte Ziehung, die zählt
   const seen = new Set();
-  const days = state.picks.filter((p) => !isVetoed(p) && !seen.has(p.pick_date) && seen.add(p.pick_date)).slice(0, 30);
+  const days = state.picks
+    .filter((p) => !seen.has(p.pick_date) && seen.add(p.pick_date))
+    .map((p) => validPickOn(p.pick_date))
+    .filter(Boolean)
+    .slice(0, 30);
   $("history").innerHTML = days.length
     ? days
         .map((p) => {
