@@ -18,6 +18,7 @@
   --line: rgba(35, 35, 35, .13);
   --accent: #0b3d2a;
   --accent-ink: #ffffff;
+  --accent-text: #0b3d2a;
   --action: #232323;
   --danger: #b3261e;
   --ok: #1d6b3f;
@@ -47,6 +48,7 @@
     --danger: #ff8a80;
     --ok: #8fe0b0;
     --accent: #145a3d;
+    --accent-text: #74d3a2;
     --bar: rgba(20, 20, 20, .78);
     --logo-b: #4a4a4a;
     --thumb: #3a3a3a;
@@ -268,6 +270,18 @@ fieldset.days { border: 0; padding: 0; margin: 0 0 16px; display: flex; gap: 6px
 fieldset.days legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
 fieldset.days label.check { margin: 0; }
 
+/* Wetter */
+.weather { padding-top: 16px; border-top: 1px solid var(--line); }
+.weather p { margin: 0 0 6px; font-size: 15px; }
+.weather label.check { margin: 0; font-size: 15px; }
+
+/* Favorit-Knopf in der Liste */
+.fav { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.fav svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.fav[aria-pressed="true"] { color: var(--accent-text); }
+.fav[aria-pressed="true"] svg { fill: currentColor; }
+.item .actions { display: flex; align-items: center; gap: 4px; }
+
 /* Einstieg: einmal beim Laden, danach steht alles */
 @media (prefers-reduced-motion: no-preference) {
   [data-enter] > * { animation: enter 700ms var(--ease-enter) both; }
@@ -361,3 +375,4 @@ dialog h2 { margin-bottom: 20px; }
   .inline-form .btn { width: 100%; }
 }
 .filters :disabled, #me-veg:disabled { cursor: default; opacity: .55; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
