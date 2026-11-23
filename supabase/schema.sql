@@ -79,3 +79,55 @@ create trigger nur_freigegebene before insert on auth.users
 revoke execute on function public.nur_freigegebene() from public, anon, authenticated;
 
 -- Erster Admin: insert into public.members (email, display_name, is_admin) values ('<adresse>', 'Christian', true);
+
+-- ---------- Paket 1: Wer kommt mit, Veto-Joker, Ruhetage (2026-11-23) ----------
+create or replace function public.berlin_today() returns date
+  language sql stable set search_path = '' as $$ select (now() at time zone 'Europe/Berlin')::date $$;
+create or replace function public.my_email() returns text
+  language sql stable set search_path = '' as $$ select lower(auth.jwt() ->> 'email') $$;
+
+alter table public.members add column if not exists vegetarian boolean not null default false;
+alter table public.restaurants add column if not exists closed_days smallint[] not null default '{}'; -- ISO: 1 = Mo … 7 = So
+
+-- eigene Vorliebe setzen, ohne Admin-Rechte am Rest der Zeile
+create or replace function public.set_my_vegetarian(v boolean) returns void
+  language sql security definer set search_path = '' as $$
+  update public.members set vegetarian = v where email = public.my_email() $$;
+revoke execute on function public.set_my_vegetarian(boolean) from public, anon;
+grant execute on function public.set_my_vegetarian(boolean) to authenticated;
+
+create table if not exists public.attendance (
+  day date not null default public.berlin_today(),
+  email text not null default public.my_email() references public.members(email) on delete cascade on update cascade,
+  created_at timestamptz not null default now(),
+  primary key (day, email)
+);
+alter table public.attendance enable row level security;
+create policy "Mitglieder lesen" on public.attendance for select to authenticated using ((select public.is_member()));
+create policy "Selbst zusagen" on public.attendance for insert to authenticated
+  with check ((select public.is_member()) and email = (select public.my_email()) and day = (select public.berlin_today()));
+create policy "Selbst absagen" on public.attendance for delete to authenticated
+  using (email = (select public.my_email()));
+
+-- ein Joker pro Person und Woche (unique email + week_start)
+create table if not exists public.vetoes (
+  id bigint generated always as identity primary key,
+  pick_id bigint not null unique references public.picks(id) on delete cascade,
+  email text not null default public.my_email() references public.members(email) on delete cascade on update cascade,
+  week_start date not null default date_trunc('week', (now() at time zone 'Europe/Berlin'))::date,
+  created_at timestamptz not null default now(),
+  unique (email, week_start)
+);
+alter table public.vetoes enable row level security;
+create policy "Mitglieder lesen" on public.vetoes for select to authenticated using ((select public.is_member()));
+create policy "Joker einlösen" on public.vetoes for insert to authenticated
+  with check (
+    (select public.is_member()) and email = (select public.my_email())
+    and week_start = date_trunc('week', (now() at time zone 'Europe/Berlin'))::date
+    and exists (select 1 from public.picks p where p.id = pick_id and p.pick_date = (select public.berlin_today()))
+  );
+create policy "Admin löscht" on public.vetoes for delete to authenticated using ((select public.is_admin()));
+
+grant select, insert, delete on public.attendance to authenticated;
+grant select, insert, delete on public.vetoes to authenticated;
+revoke all on public.attendance, public.vetoes from anon;
