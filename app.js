@@ -83,10 +83,41 @@ $("login-form").addEventListener("submit", async (e) => {
   });
   if (error) {
     const notAllowed = /database error|not allowed|freigegeben|signups/i.test(error.message);
-    setMsg(msg, notAllowed ? "Diese Adresse ist nicht freigegeben. Frag Christian, ob er dich einträgt." : "Hat nicht geklappt: " + error.message, "err");
+    const tooFast = /seconds|rate limit/i.test(error.message);
+    setMsg(
+      msg,
+      notAllowed
+        ? "Diese Adresse ist nicht freigegeben. Frag Christian, ob er dich einträgt."
+        : tooFast
+        ? "Gerade wurde schon ein Code verschickt. Bitte eine Minute warten."
+        : "Hat nicht geklappt: " + error.message,
+      "err"
+    );
   } else {
-    setMsg(msg, "Schau in dein Postfach und klick auf den Link. Du kannst dieses Fenster schließen.", "ok");
+    setMsg(msg, "");
+    loginEmail = email;
+    $("login-form").classList.add("hidden");
+    $("code-form").classList.remove("hidden");
+    setMsg($("code-msg"), `Wir haben dir eine Mail an ${email} geschickt. Gib den Code daraus hier ein.`, "ok");
+    $("login-code").focus();
   }
+});
+
+// Anmeldung per Code: robust gegen Mail-Scanner (z. B. Microsoft Safe Links),
+// die den Anmeldelink vorab aufrufen und ihn dadurch verbrauchen.
+let loginEmail = "";
+$("code-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const token = $("login-code").value.replace(/\D/g, "");
+  setMsg($("code-msg"), "Wird geprüft …");
+  const { error } = await db.auth.verifyOtp({ email: loginEmail, token, type: "email" });
+  if (error) return setMsg($("code-msg"), "Der Code passt nicht oder ist abgelaufen. Fordere einen neuen an.", "err");
+  setMsg($("code-msg"), "");
+});
+$("code-back").addEventListener("click", () => {
+  $("code-form").classList.add("hidden");
+  $("login-form").classList.remove("hidden");
+  $("login-code").value = "";
 });
 
 $("logout").addEventListener("click", async () => {
