@@ -167,3 +167,46 @@ create policy "Selbst zurücknehmen" on public.ratings for delete to authenticat
   using (email = (select public.my_email()));
 grant select, insert, update, delete on public.ratings to authenticated;
 revoke all on public.ratings from anon;
+
+-- ---------- Paket 4: Treffpunkt, Bestellliste, Tageskarte (2026-11-23) ----------
+-- Mailversand an die Mitkommenden: Edge Function supabase/functions/notify-crew,
+-- braucht die Geheimnisse GMAIL_USER und GMAIL_APP_PASSWORD.
+alter table public.restaurants add column if not exists menu_url text;
+
+create table if not exists public.meetups (
+  day date primary key default public.berlin_today(),
+  meet_time text not null default '12:15' check (meet_time ~ '^[0-2][0-9]:[0-5][0-9]$'),
+  place text not null default 'Unten am Eingang' check (char_length(place) <= 80),
+  ordering boolean not null default false,
+  updated_by text not null default public.my_email(),
+  notified_at timestamptz,
+  updated_at timestamptz not null default now()
+);
+alter table public.meetups enable row level security;
+create policy "Mitglieder lesen" on public.meetups for select to authenticated using ((select public.is_member()));
+create policy "Mitglieder legen an" on public.meetups for insert to authenticated
+  with check ((select public.is_member()) and day = (select public.berlin_today()));
+create policy "Mitglieder ändern" on public.meetups for update to authenticated
+  using ((select public.is_member()) and day = (select public.berlin_today()))
+  with check ((select public.is_member()) and day = (select public.berlin_today()));
+grant select, insert, update on public.meetups to authenticated;
+revoke all on public.meetups from anon;
+
+create table if not exists public.order_items (
+  day date not null default public.berlin_today(),
+  email text not null default public.my_email() references public.members(email) on delete cascade on update cascade,
+  item text not null check (char_length(item) between 1 and 120),
+  updated_at timestamptz not null default now(),
+  primary key (day, email)
+);
+alter table public.order_items enable row level security;
+create policy "Mitglieder lesen" on public.order_items for select to authenticated using ((select public.is_member()));
+create policy "Selbst eintragen" on public.order_items for insert to authenticated
+  with check ((select public.is_member()) and email = (select public.my_email()) and day = (select public.berlin_today()));
+create policy "Selbst ändern" on public.order_items for update to authenticated
+  using (email = (select public.my_email()) and day = (select public.berlin_today()))
+  with check (email = (select public.my_email()) and day = (select public.berlin_today()));
+create policy "Selbst löschen" on public.order_items for delete to authenticated
+  using (email = (select public.my_email()));
+grant select, insert, update, delete on public.order_items to authenticated;
+revoke all on public.order_items from anon;
