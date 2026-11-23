@@ -12,11 +12,12 @@ const state = {
   restaurants: [],
   picks: [],
   members: [],
+  attendance: [], // E-Mails, die heute dabei sind
+  vetoes: [],
   rotation: 0,
   spinning: false,
 };
 
-const COLORS = ["#e8590c", "#f59f00", "#2b8a3e", "#1971c2", "#9c36b5", "#c2255c", "#0c8599", "#5f3dc4", "#e67700", "#364fc7"];
 const PRICE = { 1: "€", 2: "€€", 3: "€€€" };
 
 function esc(s) {
@@ -26,6 +27,23 @@ function esc(s) {
 function todayBerlin() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" }).format(new Date());
 }
+
+// ISO-Wochentag in Berlin: 1 = Montag … 7 = Sonntag
+function weekdayBerlin() {
+  const d = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Berlin", weekday: "short" }).format(new Date());
+  return { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[d];
+}
+
+// Montag der laufenden Woche in Berlin, wie in der Datenbank (week_start)
+function weekStartBerlin() {
+  const [y, m, d] = todayBerlin().split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d - (weekdayBerlin() - 1)));
+  return dt.toISOString().slice(0, 10);
+}
+
+const isVetoed = (pick) => state.vetoes.some((v) => v.pick_id === pick.id);
+// Die Ziehung, die für einen Tag gilt: die letzte, gegen die kein Joker eingesetzt wurde
+const validPickOn = (day) => state.picks.find((p) => p.pick_date === day && !isVetoed(p));
 
 function formatDate(iso) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -96,18 +114,23 @@ async function start(session) {
 // ---------- Daten ----------
 
 async function loadAll() {
-  const [r, p, m] = await Promise.all([
+  const [r, p, m, a, v] = await Promise.all([
     db.from("restaurants").select("*").order("name"),
-    db.from("picks").select("*").order("created_at", { ascending: false }).limit(200),
+    db.from("picks").select("*").order("created_at", { ascending: false }).limit(300),
     db.from("members").select("*").order("email"),
+    db.from("attendance").select("email").eq("day", todayBerlin()),
+    db.from("vetoes").select("*").order("created_at", { ascending: false }).limit(300),
   ]);
   state.restaurants = r.data || [];
   state.picks = p.data || [];
   state.members = m.data || [];
+  state.attendance = (a.data || []).map((x) => x.email);
+  state.vetoes = v.data || [];
 }
 
 function renderAll() {
   renderCuisineOptions();
+  renderCrew();
   renderWheel();
   renderToday();
   renderList();
@@ -134,8 +157,8 @@ function recentlyEaten(n) {
   const days = [...new Set(state.picks.map((p) => p.pick_date).filter((d) => d < today))].slice(0, n);
   const result = new Map();
   for (const day of days) {
-    // pro Tag zählt nur die letzte Ziehung, also das, wo man wirklich war
-    const last = state.picks.find((p) => p.pick_date === day);
+    // pro Tag zählt nur die gültige Ziehung, also das, wo man wirklich war
+    const last = validPickOn(day);
     if (last) result.set(last.restaurant_id, day);
   }
   return result;
@@ -146,17 +169,25 @@ function candidates() {
   const cuisine = $("f-cuisine").value;
   const maxPrice = Number($("f-price").value);
   const maxWalk = $("f-walk").value ? Number($("f-walk").value) : null;
-  const veg = $("f-veg").value === "1";
+  const crewVeg = crewNeedsVeg();
+  const veg = $("f-veg").value === "1" || crewVeg;
+  const day = weekdayBerlin();
+  const closed = state.restaurants.filter((r) => r.active && (r.closed_days || []).includes(day));
+  // Läden, gegen die heute ein Joker eingesetzt wurde, kommen heute nicht mehr dran
+  const today = todayBerlin();
+  const vetoed = new Set(state.picks.filter((p) => p.pick_date === today && isVetoed(p)).map((p) => p.restaurant_id));
   const list = state.restaurants.filter(
     (r) =>
       r.active &&
       !exclude.has(r.id) &&
+      !vetoed.has(r.id) &&
+      !(r.closed_days || []).includes(day) &&
       (!cuisine || r.cuisine === cuisine) &&
       (!r.price || r.price <= maxPrice) &&
       (maxWalk === null || r.walk_minutes == null || r.walk_minutes <= maxWalk) &&
       (!veg || r.vegetarian)
   );
-  return { list, exclude };
+  return { list, exclude, closed, vetoed, crewVeg };
 }
 
 ["f-exclude", "f-cuisine", "f-price", "f-walk", "f-veg"].forEach((id) => $(id).addEventListener("change", renderWheel));
@@ -215,13 +246,16 @@ function renderCuisineOptions() {
 }
 
 function renderWheel() {
-  const { list, exclude } = candidates();
-  const todays = state.picks.find((p) => p.pick_date === todayBerlin());
+  const { list, exclude, closed, vetoed, crewVeg } = candidates();
+  const todays = validPickOn(todayBerlin());
   drawWheel(list, todays?.restaurant_id);
   const active = state.restaurants.filter((r) => r.active).length;
-  const names = [...exclude.keys()].map((id) => state.restaurants.find((x) => x.id === id)?.name).filter(Boolean);
+  const nameList = (ids) => ids.map((id) => state.restaurants.find((x) => x.id === id)?.name).filter(Boolean).join(", ");
   let info = `${list.length} von ${active} Restaurants im Rad.`;
-  if (names.length) info += ` Nicht dabei, weil es das zuletzt gab: ${names.join(", ")}.`;
+  if (exclude.size) info += ` Nicht dabei, weil es das zuletzt gab: ${nameList([...exclude.keys()])}.`;
+  if (closed.length) info += ` Heute Ruhetag: ${closed.map((r) => r.name).join(", ")}.`;
+  if (vetoed.size) info += ` Heute per Joker abgelehnt: ${nameList([...vetoed])}.`;
+  if (crewVeg) info += " Jemand von euch isst vegetarisch, deshalb nur Läden mit vegetarischer Auswahl.";
   $("f-info").textContent = info;
   $("spin").disabled = list.length === 0 || state.spinning;
 }
@@ -348,10 +382,8 @@ async function finish(rest, list) {
   }
   state.picks.unshift(data);
   renderToday(true);
+  renderWheel();
   renderHistory();
-  // Rad mit dem Gewinnerfeld stehen lassen; Filter zeichnen es neu
-  const { list: now } = candidates();
-  $("spin").disabled = now.length === 0;
 }
 
 function facts(r) {
@@ -366,23 +398,32 @@ function facts(r) {
 function renderToday(fresh = false) {
   const today = todayBerlin();
   $("verdict-date").textContent = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", weekday: "long", day: "numeric", month: "long" });
-  const pick = state.picks.find((p) => p.pick_date === today);
+  const pick = validPickOn(today);
   const r = pick && state.restaurants.find((x) => x.id === pick.restaurant_id);
   const name = $("verdict-name");
   const box = $("verdict");
+  renderVeto(pick);
   if (!r) {
     box.classList.remove("decided");
-    $("verdict-kicker").textContent = "Heute noch nicht gedreht";
-    name.textContent = "Wohin geht's heute?";
+    const lastVeto = state.picks.find((p) => p.pick_date === today && isVetoed(p));
+    if (lastVeto) {
+      const v = state.vetoes.find((x) => x.pick_id === lastVeto.id);
+      const vr = state.restaurants.find((x) => x.id === lastVeto.restaurant_id);
+      $("verdict-kicker").textContent = `${nameOf(v.email)} hat den Joker gegen ${vr?.name || "das Ergebnis"} gezogen`;
+      name.textContent = "Neue Runde";
+    } else {
+      $("verdict-kicker").textContent = "Heute noch nicht gedreht";
+      name.textContent = "Wohin geht's heute?";
+    }
     $("verdict-facts").textContent = "";
     $("verdict-links").innerHTML = "";
     $("spin").textContent = "Rad drehen";
+    $("spin").classList.remove("hidden");
     return;
   }
-  const count = state.picks.filter((p) => p.pick_date === today).length;
   const who = nameOf(pick.picked_by);
   box.classList.add("decided");
-  $("verdict-kicker").textContent = count > 1 ? `Heute geht's zu, ${count}. Dreh von ${who}` : `Heute geht's zu, gedreht von ${who}`;
+  $("verdict-kicker").textContent = `Heute geht's zu, gedreht von ${who}`;
   name.textContent = r.name;
   if (fresh && !reduceMotion) {
     name.classList.remove("reveal");
@@ -394,8 +435,92 @@ function renderToday(fresh = false) {
   if (r.address) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + " " + r.address)}" target="_blank" rel="noopener">Route in Google Maps</a>`);
   if (r.url) links.push(`<a href="${esc(r.url)}" target="_blank" rel="noopener">Speisekarte</a>`);
   $("verdict-links").innerHTML = links.join(" oder ");
-  $("spin").textContent = "Noch mal drehen";
+  // Ist entschieden, wird nur noch per Joker neu gedreht
+  $("spin").classList.add("hidden");
 }
+
+// ---------- Veto-Joker: einer pro Person und Woche ----------
+
+function myJokerUsed() {
+  return state.vetoes.some((v) => v.email === state.email && v.week_start === weekStartBerlin());
+}
+
+function renderVeto(pick) {
+  const btn = $("veto");
+  const info = $("veto-info");
+  if (!pick) {
+    btn.classList.add("hidden");
+    info.textContent = "";
+    return;
+  }
+  btn.classList.remove("hidden");
+  const used = myJokerUsed();
+  btn.disabled = used;
+  btn.textContent = used ? "Joker schon eingesetzt" : "Joker einsetzen";
+  info.textContent = used
+    ? "Deinen Joker für diese Woche hast du schon gezogen. Ab Montag gibt es einen neuen."
+    : "Passt dir das nicht? Mit deinem Joker lehnst du das Ergebnis einmal pro Woche ab, dann wird neu gedreht.";
+}
+
+$("veto").addEventListener("click", async () => {
+  const pick = validPickOn(todayBerlin());
+  if (!pick || myJokerUsed()) return;
+  const r = state.restaurants.find((x) => x.id === pick.restaurant_id);
+  if (!confirm(`Joker gegen ${r?.name || "dieses Ergebnis"} einsetzen? Du hast nur einen pro Woche.`)) return;
+  $("veto").disabled = true;
+  const { data, error } = await db.from("vetoes").insert({ pick_id: pick.id }).select().single();
+  if (error) {
+    $("veto-info").textContent = error.code === "23505" ? "Dein Joker für diese Woche ist schon weg." : "Hat nicht geklappt: " + error.message;
+    $("veto").disabled = false;
+    return;
+  }
+  state.vetoes.unshift(data);
+  renderToday();
+  renderWheel();
+  renderHistory();
+});
+
+// ---------- Wer kommt mit ----------
+
+function crewNeedsVeg() {
+  return state.attendance.some((e) => state.members.find((m) => m.email === e)?.vegetarian);
+}
+
+function renderCrew() {
+  const names = state.attendance.map(nameOf).sort((a, b) => a.localeCompare(b, "de"));
+  const inCrew = state.attendance.includes(state.email);
+  $("crew-line").textContent = names.length
+    ? `Heute dabei (${names.length}): ${names.join(", ")}`
+    : "Noch hat niemand zugesagt. Wer mitkommt, tippt auf „Bin dabei“.";
+  $("join").textContent = inCrew ? "Bin dabei ✓" : "Bin dabei";
+  $("join").setAttribute("aria-pressed", inCrew);
+  $("me-veg").checked = !!state.members.find((m) => m.email === state.email)?.vegetarian;
+}
+
+$("join").addEventListener("click", async () => {
+  const inCrew = state.attendance.includes(state.email);
+  $("join").disabled = true;
+  const { error } = inCrew
+    ? await db.from("attendance").delete().eq("day", todayBerlin()).eq("email", state.email)
+    : await db.from("attendance").insert({});
+  $("join").disabled = false;
+  if (error && error.code !== "23505") return alert("Hat nicht geklappt: " + error.message);
+  state.attendance = inCrew ? state.attendance.filter((e) => e !== state.email) : [...state.attendance, state.email];
+  renderCrew();
+  renderWheel();
+});
+
+$("me-veg").addEventListener("change", async (e) => {
+  const v = e.target.checked;
+  const { error } = await db.rpc("set_my_vegetarian", { v });
+  if (error) {
+    e.target.checked = !v;
+    return alert("Hat nicht geklappt: " + error.message);
+  }
+  const me = state.members.find((m) => m.email === state.email);
+  if (me) me.vegetarian = v;
+  renderWheel();
+});
 
 $("quick-add").addEventListener("click", () => openForm(null));
 
@@ -413,7 +538,7 @@ function renderList() {
       <div class="item ${r.active ? "" : "inactive"}">
         <div class="main">
           <div class="title">${esc(r.name)}${r.vegetarian ? '<span class="tag">veggie</span>' : ""}${r.active ? "" : '<span class="tag">pausiert</span>'}</div>
-          <div class="sub">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min." : null, r.address].filter(Boolean).map(esc).join(" · ")}</div>
+          <div class="sub">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min." : null, r.address, closedText(r)].filter(Boolean).map(esc).join(" · ")}</div>
           ${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}
         </div>
         <button class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>
@@ -422,6 +547,12 @@ function renderList() {
         .join("")
     : `<p class="muted">${state.restaurants.length ? "Nichts gefunden." : "Noch keine Restaurants. Trag das erste ein."}</p>`;
   document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openForm(b.dataset.edit)));
+}
+
+const DAY_NAMES = { 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa", 7: "So" };
+function closedText(r) {
+  const d = (r.closed_days || []).slice().sort();
+  return d.length ? "Ruhetag " + d.map((x) => DAY_NAMES[x]).join(", ") : null;
 }
 
 $("add-restaurant").addEventListener("click", () => openForm(null));
@@ -440,6 +571,7 @@ function openForm(id) {
   $("r-url").value = r.url || "";
   $("r-notes").value = r.notes || "";
   $("r-active").checked = id ? r.active : true;
+  document.querySelectorAll("[data-day]").forEach((cb) => (cb.checked = (r.closed_days || []).includes(Number(cb.dataset.day))));
   $("r-delete").classList.toggle("hidden", !(state.admin && id));
   setMsg($("r-msg"), id && r.created_by ? `Eingetragen von ${nameOf(r.created_by)}` : "");
   $("dlg").showModal();
@@ -458,6 +590,7 @@ $("r-form").addEventListener("submit", async (e) => {
     url: $("r-url").value.trim() || null,
     notes: $("r-notes").value.trim() || null,
     active: $("r-active").checked,
+    closed_days: [...document.querySelectorAll("[data-day]:checked")].map((cb) => Number(cb.dataset.day)),
   };
   const dup = state.restaurants.find((r) => r.id !== id && r.name.toLowerCase() === payload.name.toLowerCase());
   if (dup) return setMsg($("r-msg"), "Das Restaurant steht schon in der Liste.", "err");
@@ -488,13 +621,15 @@ function renderHistory() {
   const byId = Object.fromEntries(state.restaurants.map((r) => [r.id, r]));
   // pro Tag nur die letzte Ziehung, die zählt
   const seen = new Set();
-  const days = state.picks.filter((p) => !seen.has(p.pick_date) && seen.add(p.pick_date)).slice(0, 30);
+  const days = state.picks.filter((p) => !isVetoed(p) && !seen.has(p.pick_date) && seen.add(p.pick_date)).slice(0, 30);
   $("history").innerHTML = days.length
     ? days
         .map((p) => {
-          const tries = state.picks.filter((x) => x.pick_date === p.pick_date).length;
+          const jokers = state.picks
+            .filter((x) => x.pick_date === p.pick_date && isVetoed(x))
+            .map((x) => `${nameOf(state.vetoes.find((v) => v.pick_id === x.id).email)} gegen ${byId[x.restaurant_id]?.name || "gelöscht"}`);
           return `<div class="item"><div class="main"><div class="title">${esc(byId[p.restaurant_id]?.name || "gelöscht")}</div>
-          <div class="sub">${formatDate(p.pick_date)} · gedreht von ${esc(nameOf(p.picked_by))}${tries > 1 ? ` · ${tries} Versuche` : ""}</div></div>
+          <div class="sub">${formatDate(p.pick_date)} · gedreht von ${esc(nameOf(p.picked_by))}${jokers.length ? ` · Joker: ${esc(jokers.join(", "))}` : ""}</div></div>
           ${state.admin ? `<button class="btn btn--plain btn--small btn--destructive" data-undo="${p.id}">Entfernen</button>` : ""}</div>`;
         })
         .join("")

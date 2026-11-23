@@ -45,10 +45,19 @@
           <h1 id="verdict-name" class="verdict-name">Wohin geht's heute?</h1>
           <p id="verdict-facts" class="verdict-facts"></p>
           <p id="verdict-links" class="verdict-links"></p>
+          <div class="crew">
+            <p id="crew-line" class="crew-line"></p>
+            <div class="crew-actions">
+              <button id="join" type="button" class="btn btn--secondary btn--small">Bin dabei</button>
+              <label class="check small"><input id="me-veg" type="checkbox" /> Ich esse vegetarisch</label>
+            </div>
+          </div>
           <div class="btn-row">
             <button id="spin" class="btn btn--primary">Rad drehen</button>
+            <button id="veto" class="btn btn--secondary hidden">Joker einsetzen</button>
             <button id="quick-add" class="btn btn--secondary">Restaurant eintragen</button>
           </div>
+          <p id="veto-info" class="f-info"></p>
           <p id="f-info" class="f-info"></p>
         </div>
 
@@ -150,6 +159,15 @@
       <label>Adresse<input id="r-address" maxlength="120" /></label>
       <label>Link (Speisekarte, Webseite)<input id="r-url" type="url" maxlength="300" /></label>
       <label>Notizen<textarea id="r-notes" rows="2" maxlength="300" placeholder="z. B. Mittagstisch bis 14 Uhr, montags zu"></textarea></label>
+      <fieldset class="days">
+        <legend>Ruhetage</legend>
+        <label class="check"><input type="checkbox" data-day="1" /> Mo</label>
+        <label class="check"><input type="checkbox" data-day="2" /> Di</label>
+        <label class="check"><input type="checkbox" data-day="3" /> Mi</label>
+        <label class="check"><input type="checkbox" data-day="4" /> Do</label>
+        <label class="check"><input type="checkbox" data-day="5" /> Fr</label>
+        <label class="check"><input type="checkbox" data-day="6" /> Sa</label>
+      </fieldset>
       <label class="check"><input id="r-active" type="checkbox" checked /> kommt ins Glücksrad</label>
       <p id="r-msg" class="msg"></p>
       <div class="row-between">

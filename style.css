@@ -254,6 +254,20 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .seg-btn:hover { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .seg::before { transition: none; } }
 
+/* Wer kommt mit */
+.crew { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.verdict.decided .crew { border-top-color: rgba(255,255,255,.2); }
+.crew-line { margin: 0 0 12px; font-size: 16px; }
+.crew-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.crew-actions label.check { margin: 0; font-size: 15px; }
+.verdict.decided label.check input { accent-color: #ffffff; }
+#join[aria-pressed="true"] { background: var(--ink); color: var(--g-main); border-color: var(--ink); }
+.verdict.decided #join[aria-pressed="true"] { background: var(--accent-ink); color: var(--accent); border-color: var(--accent-ink); }
+.f-info:empty { display: none; }
+fieldset.days { border: 0; padding: 0; margin: 0 0 16px; display: flex; gap: 6px 16px; flex-wrap: wrap; }
+fieldset.days legend { font-size: 14px; font-weight: 500; padding: 0; margin-bottom: 8px; }
+fieldset.days label.check { margin: 0; }
+
 /* Einstieg: einmal beim Laden, danach steht alles */
 @media (prefers-reduced-motion: no-preference) {
   [data-enter] > * { animation: enter 700ms var(--ease-enter) both; }
@@ -300,6 +314,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 dialog {
   border: 1px solid var(--line); border-radius: var(--r-lg); padding: 32px;
   width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px); overflow-y: auto;
   background: var(--g-main); color: var(--ink);
 }
 dialog::backdrop { background: rgb(20 20 20 / .45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
