@@ -1138,7 +1138,12 @@ async function backfillCoords(list) {
     if (hit) {
       const { data, error } = await db.from("restaurants").update(hit).eq("id", cur.id).eq("address", addr).is("lat", null).select();
       if (!error && data?.length) Object.assign(cur, hit);
-      else if (error) geoTried.add(cur.id);
+      else {
+        // Jemand anderes war schneller (Adresse oder Ort geändert): frischen Stand holen, nicht erneut versuchen.
+        geoTried.add(cur.id);
+        const fresh = await db.from("restaurants").select("*").eq("id", cur.id).single();
+        if (!fresh.error && fresh.data) Object.assign(cur, fresh.data);
+      }
     } else geoTried.add(cur.id);
     await new Promise((ok) => setTimeout(ok, 1100));
   }
