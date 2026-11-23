@@ -95,7 +95,7 @@
           </div>
         </div>
         <div class="filters">
-            <label>Küche<select id="f-cuisine"><option value="">Alle</option></select></label>
+            <label>Kategorie<select id="f-cuisine"><option value="">Alle</option></select></label>
             <label>Zuletzt gegessen
               <select id="f-exclude">
                 <option value="0">Alle zulassen</option>
@@ -146,8 +146,21 @@
         <h2>Restaurants</h2>
         <button id="add-restaurant" class="btn btn--primary">Restaurant eintragen</button>
       </div>
-      <input id="search" type="search" placeholder="Suchen …" />
-      <div id="restaurant-list" class="list"></div>
+      <div class="liste-tools">
+        <div class="seg-field"><span class="seg-label" id="l-view">Ansicht</span>
+          <select id="r-view" class="seg-source" aria-labelledby="l-view">
+            <option value="list">Liste</option>
+            <option value="map">Karte</option>
+          </select>
+        </div>
+        <input id="search" type="search" placeholder="Suchen …" />
+      </div>
+      <div id="cat-chips" class="chips" role="group" aria-label="Kategorie"></div>
+      <div id="restaurant-list"></div>
+      <div id="map-wrap" class="hidden">
+        <div id="map" class="map" role="region" aria-label="Karte mit allen Restaurants"></div>
+        <p id="map-note" class="muted map-note"></p>
+      </div>
     </section>
 
     <!-- Verlauf -->
@@ -183,7 +196,7 @@
       <h2 id="dlg-title">Restaurant</h2>
       <input type="hidden" id="r-id" />
       <label>Name<input id="r-name" required maxlength="80" /></label>
-      <label>Küche<input id="r-cuisine" list="cuisine-list" maxlength="40" placeholder="z. B. Italienisch, Asiatisch, Döner" /></label>
+      <label>Kategorie<input id="r-cuisine" list="cuisine-list" maxlength="40" placeholder="z. B. Italienisch, Asiatisch, Döner, Kantine" /></label>
       <datalist id="cuisine-list"></datalist>
       <div class="two">
         <label>Preis
@@ -197,7 +210,7 @@
         <label>Fußweg (Minuten)<input id="r-walk" type="number" min="0" max="120" /></label>
       </div>
       <label class="check"><input id="r-veg" type="checkbox" /> vegetarische Auswahl</label>
-      <label>Adresse<input id="r-address" maxlength="120" /></label>
+      <label>Adresse<input id="r-address" maxlength="120" placeholder="Straße Hausnummer, Ort" /></label>
       <label>Link (Speisekarte, Webseite)<input id="r-url" type="url" maxlength="300" /></label>
       <label>Link zur Tageskarte / Mittagstisch<input id="r-menu" type="url" maxlength="300" placeholder="z. B. Seite oder Instagram mit dem Wochenplan" /></label>
       <label>Notizen<textarea id="r-notes" rows="2" maxlength="300" placeholder="z. B. Mittagstisch bis 14 Uhr, montags zu"></textarea></label>

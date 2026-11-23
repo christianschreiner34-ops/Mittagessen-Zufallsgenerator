@@ -164,6 +164,7 @@ document.querySelectorAll(".tab").forEach((btn) =>
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b === btn));
     document.querySelectorAll(".tab-page").forEach((p) => p.classList.toggle("hidden", p.id !== "tab-" + btn.dataset.tab));
+    if (btn.dataset.tab === "liste" && mapOn()) renderMap();
   })
 );
 
@@ -848,13 +849,38 @@ $("quick-add").addEventListener("click", () => openForm(null));
 
 $("search").addEventListener("input", renderList);
 
-function renderList() {
+const NO_CAT = "Ohne Kategorie";
+const catOf = (r) => r.cuisine || NO_CAT;
+let listCat = "";
+
+// Restaurants nach Suche und gewählter Kategorie (gilt für Liste und Karte)
+function listItems() {
   const q = $("search").value.trim().toLowerCase();
-  const items = state.restaurants.filter((r) => !q || [r.name, r.cuisine, r.address, r.notes].join(" ").toLowerCase().includes(q));
-  $("restaurant-list").innerHTML = items.length
-    ? items
-        .map(
-          (r) => `
+  return state.restaurants.filter(
+    (r) => (!listCat || catOf(r) === listCat) && (!q || [r.name, r.cuisine, r.address, r.notes].join(" ").toLowerCase().includes(q))
+  );
+}
+
+function renderChips() {
+  const counts = {};
+  state.restaurants.forEach((r) => (counts[catOf(r)] = (counts[catOf(r)] || 0) + 1));
+  const cats = Object.keys(counts).sort((a, b) => (a === NO_CAT) - (b === NO_CAT) || a.localeCompare(b, "de"));
+  if (listCat && !counts[listCat]) listCat = "";
+  $("cat-chips").innerHTML = cats.length > 1
+    ? [["", "Alle", state.restaurants.length], ...cats.map((c) => [c, c, counts[c]])]
+        .map(([v, l, n]) => `<button type="button" class="chip" data-cat="${esc(v)}" aria-pressed="${listCat === v}">${esc(l)} <span>${n}</span></button>`)
+        .join("")
+    : "";
+  document.querySelectorAll("[data-cat]").forEach((b) =>
+    b.addEventListener("click", () => {
+      listCat = b.dataset.cat;
+      renderList();
+    })
+  );
+}
+
+function itemHtml(r) {
+  return `
       <div class="item ${r.active ? "" : "inactive"}">
         <div class="main">
           <div class="title">${esc(r.name)}${r.vegetarian ? '<span class="tag">veggie</span>' : ""}${r.active ? "" : '<span class="tag">pausiert</span>'}</div>
@@ -866,12 +892,25 @@ function renderList() {
           <button class="btn btn--plain btn--small fav" data-fav="${r.id}" aria-pressed="${isMyFav(r.id)}" title="Lieblingsladen: bekommt ein größeres Feld im Rad">${HEART}<span>${favCount(r.id, true) || ""}</span><span class="sr-only">Favorit</span></button>
           <button class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>
         </div>
-      </div>`
-        )
-        .join("")
+      </div>`;
+}
+
+function renderList() {
+  renderChips();
+  const items = listItems();
+  // Gruppiert nach Kategorie, solange nicht schon eine Kategorie gewählt ist
+  const groups = {};
+  items.forEach((r) => (groups[catOf(r)] ||= []).push(r));
+  const names = Object.keys(groups).sort((a, b) => (a === NO_CAT) - (b === NO_CAT) || a.localeCompare(b, "de"));
+  const grouped = !listCat && names.length > 1;
+  $("restaurant-list").innerHTML = items.length
+    ? grouped
+      ? names.map((c) => `<h3 class="group-head">${esc(c)}</h3><div class="list">${groups[c].map(itemHtml).join("")}</div>`).join("")
+      : `<div class="list">${items.map(itemHtml).join("")}</div>`
     : `<p class="muted">${state.restaurants.length ? "Nichts gefunden." : "Noch keine Restaurants. Trag das erste ein."}</p>`;
-  document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openForm(b.dataset.edit)));
+  document.querySelectorAll("#restaurant-list [data-edit]").forEach((b) => b.addEventListener("click", () => openForm(b.dataset.edit)));
   document.querySelectorAll("[data-fav]").forEach((b) => b.addEventListener("click", () => toggleFav(b.dataset.fav)));
+  if (mapOn()) renderMap();
 }
 
 const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/></svg>';
@@ -937,14 +976,141 @@ $("r-form").addEventListener("submit", async (e) => {
   };
   const dup = state.restaurants.find((r) => r.id !== id && r.name.toLowerCase() === payload.name.toLowerCase());
   if (dup) return setMsg($("r-msg"), "Das Restaurant steht schon in der Liste.", "err");
+  // Ort für die Karte: nur neu suchen, wenn die Adresse neu ist oder sich geändert hat
+  const old = state.restaurants.find((r) => r.id === id);
+  if (!payload.address) Object.assign(payload, { lat: null, lng: null });
+  else if (!old || old.address !== payload.address || old.lat == null) {
+    setMsg($("r-msg"), "Adresse wird auf der Karte gesucht …");
+    const hit = await geocode(payload.address);
+    Object.assign(payload, hit || { lat: null, lng: null });
+    if (hit) geoTried.delete(id);
+  }
   const res = id
     ? await db.from("restaurants").update(payload).eq("id", id).select().single()
     : await db.from("restaurants").insert(payload).select().single();
   if (res.error) return setMsg($("r-msg"), "Speichern fehlgeschlagen: " + res.error.message, "err");
   state.restaurants = state.restaurants.filter((r) => r.id !== res.data.id).concat(res.data).sort((a, b) => a.name.localeCompare(b.name, "de"));
+  if (payload.address && res.data.lat == null) geoTried.add(res.data.id);
   $("dlg").close();
   renderAll();
 });
+
+// ---------- Karte ----------
+// Leaflet mit OpenStreetMap-Kacheln, Ortssuche über Nominatim. Beides kostenlos und ohne Schlüssel.
+
+const HN = [49.1427, 9.2109]; // Heilbronn
+const geoTried = new Set(); // in dieser Sitzung schon erfolglos gesucht
+let map = null, mapLayer = null, leafletLoading = null;
+const mapOn = () => $("r-view").value === "map";
+
+async function geocode(address) {
+  try {
+    const u = new URL("https://nominatim.openstreetmap.org/search");
+    u.search = new URLSearchParams({ format: "jsonv2", limit: "1", countrycodes: "de", "accept-language": "de", viewbox: "9.05,49.25,9.40,49.05", q: address });
+    const res = await fetch(u);
+    const [hit] = await res.json();
+    return hit ? { lat: Number(hit.lat), lng: Number(hit.lon) } : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  return (leafletLoading ||= new Promise((ok, fail) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+    document.head.append(css);
+    const js = document.createElement("script");
+    js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    js.onload = ok;
+    js.onerror = fail;
+    document.head.append(js);
+  }));
+}
+
+$("r-view").addEventListener("change", () => {
+  const on = mapOn();
+  $("restaurant-list").classList.toggle("hidden", on);
+  $("map-wrap").classList.toggle("hidden", !on);
+  if (on) renderMap();
+});
+
+async function renderMap() {
+  try {
+    await loadLeaflet();
+  } catch {
+    $("map-note").textContent = "Die Karte konnte nicht geladen werden.";
+    return;
+  }
+  if (!map) {
+    map = L.map("map", { scrollWheelZoom: false }).setView(HN, 14);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    mapLayer = L.layerGroup().addTo(map);
+    map.on("popupopen", (e) => {
+      const b = e.popup.getElement().querySelector("[data-edit]");
+      if (b) b.addEventListener("click", () => openForm(b.dataset.edit));
+    });
+  }
+  map.invalidateSize();
+  const items = listItems();
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#0b3d2a";
+  mapLayer.clearLayers();
+  const pts = [];
+  for (const r of items.filter((x) => x.lat != null)) {
+    const m = L.marker([r.lat, r.lng], {
+      draggable: true,
+      title: r.name,
+      icon: L.divIcon({ className: "pin", html: `<span style="background:${accent}"></span>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+    });
+    m.bindPopup(
+      `<strong>${esc(r.name)}</strong><br>${[catOf(r), PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min. zu Fuß" : null].filter(Boolean).map(esc).join(" · ")}` +
+        `${r.address ? `<br>${esc(r.address)}` : ""}<br><button type="button" class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>`
+    );
+    m.on("dragend", async () => {
+      const { lat, lng } = m.getLatLng();
+      const { error } = await db.from("restaurants").update({ lat, lng }).eq("id", r.id);
+      if (error) return alert("Ort konnte nicht gespeichert werden: " + error.message);
+      Object.assign(r, { lat, lng });
+    });
+    m.addTo(mapLayer);
+    pts.push([r.lat, r.lng]);
+  }
+  if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
+  else if (pts.length === 1) map.setView(pts[0], 16);
+  const missing = items.filter((x) => x.lat == null);
+  const noAddr = missing.filter((x) => !x.address).map((x) => x.name);
+  const notFound = missing.filter((x) => x.address && geoTried.has(x.id)).map((x) => x.name);
+  $("map-note").textContent = [
+    pts.length ? "Pin falsch? Einfach an die richtige Stelle ziehen." : "",
+    noAddr.length ? `Ohne Adresse, daher nicht auf der Karte: ${noAddr.join(", ")}.` : "",
+    notFound.length ? `Adresse nicht gefunden: ${notFound.join(", ")}. Am besten mit Straße, Hausnummer und Ort eintragen.` : "",
+  ].filter(Boolean).join(" ");
+  backfillCoords(missing.filter((x) => x.address && !geoTried.has(x.id)));
+}
+
+// Restaurants mit Adresse, aber ohne Ort nachträglich suchen. Nominatim erlaubt eine Anfrage pro Sekunde.
+let backfilling = false;
+async function backfillCoords(list) {
+  if (backfilling || !list.length) return;
+  backfilling = true;
+  for (const r of list) {
+    const hit = await geocode(r.address);
+    if (hit) {
+      const { error } = await db.from("restaurants").update(hit).eq("id", r.id);
+      if (!error) {
+        Object.assign(r, hit);
+      } else geoTried.add(r.id);
+    } else geoTried.add(r.id);
+    await new Promise((ok) => setTimeout(ok, 1100));
+  }
+  backfilling = false;
+  if (mapOn()) renderMap();
+}
 
 $("r-delete").addEventListener("click", async () => {
   const id = $("r-id").value;

@@ -5,7 +5,7 @@ Webseite fürs Office in Heilbronn: Kollegen tragen Restaurants in eine gemeinsa
 ## Was die Seite kann
 
 - Anmeldung per E-Mail-Link, nur für Adressen, die ein Admin freigegeben hat
-- Restaurants eintragen und bearbeiten (Küche, Preis, Fußweg, vegetarisch, Adresse, Link, Notizen)
+- Restaurants eintragen und bearbeiten (Kategorie, Preis, Fußweg, vegetarisch, Adresse, Link, Notizen)
 - Glücksrad mit Filtern; was an den letzten Essenstagen gezogen wurde, fliegt automatisch raus (am Montag ist „gestern" der Freitag)
 - Verlauf der Ziehungen und die häufigsten Ziele
 - Admins geben Kollegen frei, löschen Restaurants und entfernen Ziehungen
