@@ -615,8 +615,30 @@ async function loadWeather() {
 
 // ---------- Treffpunkt, Uhrzeit und Bestellliste ----------
 
+const MEET_DEFAULTS = { meet_time: "12:15", place: "Unten am Eingang", ordering: false };
+
+// Treffpunkt und Bestellungen der anderen neu laden (beim Eintragen, beim Zurückkehren
+// auf die Seite und alle 30 Sekunden, solange der Treffpunkt sichtbar ist).
+async function refreshMeet() {
+  const day = todayBerlin();
+  const [mt, o] = await Promise.all([
+    db.from("meetups").select("*").eq("day", day),
+    db.from("order_items").select("email, item").eq("day", day),
+  ]);
+  if (mt.error || o.error) return;
+  state.meetup = mt.data[0] || null;
+  state.orders = o.data;
+  renderMeet();
+}
+setInterval(() => {
+  if (state.email && document.visibilityState === "visible" && !$("meet").classList.contains("hidden")) refreshMeet();
+}, 30000);
+document.addEventListener("visibilitychange", () => {
+  if (state.email && document.visibilityState === "visible" && !$("meet").classList.contains("hidden")) refreshMeet();
+});
+
 function renderMeet() {
-  const m = state.meetup || { meet_time: "12:15", place: "Unten am Eingang", ordering: false };
+  const m = { ...MEET_DEFAULTS, ...(state.meetup || {}) };
   if (document.activeElement !== $("meet-time")) $("meet-time").value = m.meet_time;
   if (document.activeElement !== $("meet-place")) $("meet-place").value = m.place;
   if ($("meet-mode").value !== (m.ordering ? "1" : "0")) {
@@ -663,6 +685,7 @@ $("order-form").addEventListener("submit", async (e) => {
   $("my-order").blur();
   setMsg($("meet-msg"), item ? "Eingetragen." : "Bestellung gelöscht.", "ok");
   renderMeet();
+  refreshMeet();
 });
 
 $("notify").addEventListener("click", async () => {
@@ -680,7 +703,7 @@ $("notify").addEventListener("click", async () => {
     return setMsg($("meet-msg"), text, "err");
   }
   setMsg($("meet-msg"), `Mail ist raus an ${data.sent} ${data.sent === 1 ? "Person" : "Personen"}.`, "ok");
-  state.meetup = { ...(state.meetup || {}), notified_at: new Date().toISOString() };
+  state.meetup = data.meetup || { ...MEET_DEFAULTS, ...(state.meetup || {}), notified_at: new Date().toISOString() };
   renderMeet();
 });
 

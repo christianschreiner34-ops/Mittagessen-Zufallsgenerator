@@ -45,18 +45,32 @@ Deno.serve(async (req) => {
   const names = new Map((members.data ?? []).map((m) => [m.email, m.display_name || m.email.split("@")[0]]));
   if (!names.has(me)) return json(403, { error: "Nicht freigegeben" });
 
+  // Es zählt nur der neueste Pick des Tages. Wurde er per Veto gekippt, ist der Tag offen (wie validPickOn in app.js).
   const vetoed = new Set((vetoes.data ?? []).map((v) => v.pick_id));
-  const pick = (picks.data ?? []).find((p) => !vetoed.has(p.id));
+  const pick = (picks.data ?? [])[0];
   if (!pick) return json(400, { error: "Heute wurde noch nicht gedreht." });
+  if (vetoed.has(pick.id)) return json(400, { error: "Das heutige Ergebnis wurde per Veto gekippt. Erst neu drehen." });
   const { data: rest } = await db.from("restaurants").select("name, address, menu_url").eq("id", pick.restaurant_id).single();
-
-  const m = meetup.data ?? { meet_time: "12:15", place: "Unten am Eingang", ordering: false, notified_at: null };
-  if (m.notified_at && Date.now() - new Date(m.notified_at).getTime() < 10 * 60 * 1000) {
-    return json(429, { error: "Die Mail ging gerade erst raus. Bitte frühestens in 10 Minuten noch mal." });
-  }
 
   const to = (attendance.data ?? []).map((a) => a.email);
   if (!to.length) return json(400, { error: "Noch hat niemand „Bin dabei“ getippt." });
+
+  // Sendeplatz in der Datenbank belegen, bevor die Mail rausgeht. So kann bei zwei
+  // gleichzeitigen Klicks nur einer gewinnen (die Zeile wird beim UPDATE gesperrt).
+  if (!meetup.data) await db.from("meetups").upsert({ day }, { onConflict: "day", ignoreDuplicates: true });
+  const before = meetup.data?.notified_at ?? null;
+  const claimedAt = new Date().toISOString();
+  const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: claimed, error: claimError } = await db
+    .from("meetups")
+    .update({ notified_at: claimedAt })
+    .eq("day", day)
+    .or(`notified_at.is.null,notified_at.lt.${cutoff}`)
+    .select()
+    .maybeSingle();
+  if (claimError) return json(500, { error: "Treffpunkt konnte nicht gelesen werden: " + claimError.message });
+  if (!claimed) return json(429, { error: "Die Mail ging gerade erst raus. Bitte frühestens in 10 Minuten noch mal." });
+  const m = claimed;
 
   const lines = m.ordering
     ? [`Heute wird bei ${rest?.name} bestellt.`, `Bestellt wird um ${m.meet_time} Uhr. Tragt bis dahin auf der Seite ein, was ihr möchtet.`]
@@ -75,9 +89,10 @@ Deno.serve(async (req) => {
       text: lines.join("\n"),
     });
   } catch (e) {
+    // Sendeplatz wieder freigeben, damit man es gleich noch mal versuchen kann.
+    await db.from("meetups").update({ notified_at: before }).eq("day", day).eq("notified_at", claimedAt);
     return json(502, { error: "Mail konnte nicht verschickt werden: " + (e as Error).message });
   }
 
-  await db.from("meetups").upsert({ day, meet_time: m.meet_time, place: m.place, ordering: m.ordering, notified_at: new Date().toISOString() });
-  return json(200, { sent: to.length });
+  return json(200, { sent: to.length, meetup: m });
 });
