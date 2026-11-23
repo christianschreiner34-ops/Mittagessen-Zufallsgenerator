@@ -165,59 +165,49 @@ function renderCuisineOptions() {
   const cuisines = [...new Set(state.restaurants.map((r) => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
   const sel = $("f-cuisine");
   const current = sel.value;
-  sel.innerHTML = '<option value="">jede Küche</option>' + cuisines.map((c) => `<option value="${esc(c)}">nur ${esc(c)}</option>`).join("");
+  sel.innerHTML = '<option value="">Alle</option>' + cuisines.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
   sel.value = cuisines.includes(current) ? current : "";
   $("cuisine-list").innerHTML = cuisines.map((c) => `<option value="${esc(c)}">`).join("");
 }
 
 function renderWheel() {
   const { list, exclude } = candidates();
-  drawWheel(list);
+  const todays = state.picks.find((p) => p.pick_date === todayBerlin());
+  drawWheel(list, todays?.restaurant_id);
   const active = state.restaurants.filter((r) => r.active).length;
   const names = [...exclude.keys()].map((id) => state.restaurants.find((x) => x.id === id)?.name).filter(Boolean);
-  let info = `${list.length} von ${active} Restaurants sind im Rad.`;
-  if (names.length) info += ` Draußen: ${names.join(", ")}.`;
+  let info = `${list.length} von ${active} Restaurants im Rad.`;
+  if (names.length) info += ` Nicht dabei, weil es das zuletzt gab: ${names.join(", ")}.`;
   $("f-info").textContent = info;
   $("spin").disabled = list.length === 0 || state.spinning;
 }
 
-// Farben des Rads: Trollingerrot und Weiß im Wechsel, wie ein Jahrmarktrad.
+// Rad in den Farben der Seite: Weiß und Hellgrau im Wechsel, Mint nur für das Gewinnerfeld.
 const darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
-const WHEEL = { red: "#8c1c2c", white: "#fbfaf8", dark: "#231d1b", rim: darkMode ? "#3d322d" : "#231d1b", bulbOn: "#ffd66b", bulbOff: "#5a4a3c" };
-const BULBS = 28;
+const WHEEL = darkMode
+  ? { a: "#1f1f1f", b: "#2a2a2a", ink: "#f1f1f1", line: "rgba(241,241,241,.16)", win: "#a1ffcb", winInk: "#232323" }
+  : { a: "#ffffff", b: "#e9e9e9", ink: "#232323", line: "rgba(35,35,35,.16)", win: "#a1ffcb", winInk: "#232323" };
 
-function drawWheel(list, bulbPhase = -1) {
+function drawWheel(list, winnerId = null) {
   const c = $("wheel");
   const ctx = c.getContext("2d");
   const size = c.width;
   const R = size / 2;
-  const rimW = 34;
-  const r = R - rimW;
+  const r = R - 4;
   ctx.clearRect(0, 0, size, size);
   ctx.save();
   ctx.translate(R, R);
 
-  // Rand mit Glühbirnen
-  ctx.beginPath();
-  ctx.arc(0, 0, R - 2, 0, Math.PI * 2);
-  ctx.fillStyle = WHEEL.rim;
-  ctx.fill();
-  for (let i = 0; i < BULBS; i++) {
-    const a = (i / BULBS) * Math.PI * 2 - Math.PI / 2;
-    const lit = bulbPhase < 0 ? true : (i + bulbPhase) % 3 === 0;
-    ctx.beginPath();
-    ctx.arc(Math.cos(a) * (R - rimW / 2 - 1), Math.sin(a) * (R - rimW / 2 - 1), 7, 0, Math.PI * 2);
-    ctx.fillStyle = lit ? WHEEL.bulbOn : WHEEL.bulbOff;
-    ctx.fill();
-  }
-
   if (list.length === 0) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = WHEEL.white;
+    ctx.fillStyle = WHEEL.a;
     ctx.fill();
-    ctx.fillStyle = WHEEL.dark;
-    ctx.font = "600 30px 'Barlow Semi Condensed', sans-serif";
+    ctx.strokeStyle = WHEEL.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = WHEEL.ink;
+    ctx.font = "500 30px 'Host Grotesk', sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(state.restaurants.length ? "Nichts passt zu den Filtern" : "Noch keine Restaurants", 0, 10);
     ctx.restore();
@@ -228,50 +218,45 @@ function drawWheel(list, bulbPhase = -1) {
   const seg = (Math.PI * 2) / n;
   list.forEach((rest, i) => {
     const a0 = state.rotation + i * seg;
-    // bei ungerader Anzahl wäre die Naht rot an rot, deshalb das letzte Feld dunkel
-    let fill = i % 2 === 0 ? WHEEL.red : WHEEL.white;
-    if (n % 2 === 1 && i === n - 1 && n > 1) fill = WHEEL.dark;
-    const text = fill === WHEEL.white ? WHEEL.red : WHEEL.white;
+    const isWin = rest.id === winnerId;
+    let fill = i % 2 === 0 ? WHEEL.a : WHEEL.b;
+    if (n % 2 === 1 && i === n - 1 && n > 1) fill = darkMode ? "#343434" : "#dcdcdc";
+    if (isWin) fill = WHEEL.win;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.arc(0, 0, r, a0, a0 + seg);
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
+    ctx.strokeStyle = WHEEL.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     ctx.save();
-    ctx.rotate(a0 + seg / 2);
-    ctx.fillStyle = text;
-    const fontSize = Math.round(Math.max(18, Math.min(38, 420 / n + 6)));
-    ctx.font = `700 ${fontSize}px 'Barlow Semi Condensed', sans-serif`;
-    ctx.textAlign = "right";
+    const mid = a0 + seg / 2;
+    const flip = Math.cos(mid) < 0;
+    ctx.rotate(flip ? mid + Math.PI : mid);
+    ctx.fillStyle = isWin ? WHEEL.winInk : WHEEL.ink;
+    const fontSize = Math.round(Math.max(18, Math.min(32, 360 / n + 4)));
+    ctx.font = `500 ${fontSize}px 'Host Grotesk', sans-serif`;
+    ctx.textAlign = flip ? "left" : "right";
     ctx.textBaseline = "middle";
     let label = rest.name;
-    const maxW = r - 70;
+    const maxW = r - 92;
     while (ctx.measureText(label).width > maxW && label.length > 3) label = label.slice(0, -2) + "…";
-    ctx.fillText(label, r - 22, 1);
+    ctx.fillText(label, flip ? -(r - 28) : r - 28, 1);
     ctx.restore();
   });
 
-  // Speichen als feine Linien
-  ctx.strokeStyle = "rgba(35,29,27,.35)";
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < n && n > 1; i++) {
-    const a = state.rotation + i * seg;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.strokeStyle = WHEEL.line;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
-  // Nabe
   ctx.beginPath();
-  ctx.arc(0, 0, 40, 0, Math.PI * 2);
-  ctx.fillStyle = WHEEL.rim;
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(0, 0, 10, 0, Math.PI * 2);
-  ctx.fillStyle = WHEEL.bulbOn;
+  ctx.arc(0, 0, 30, 0, Math.PI * 2);
+  ctx.fillStyle = WHEEL.ink;
   ctx.fill();
   ctx.restore();
 }
@@ -283,36 +268,35 @@ $("spin").addEventListener("click", () => {
   if (!list.length || state.spinning) return;
   state.spinning = true;
   $("spin").disabled = true;
-  $("tab-rad").classList.add("is-spinning");
 
   const winner = Math.floor(Math.random() * list.length);
   const seg = (Math.PI * 2) / list.length;
-  const pointer = -Math.PI / 2; // Klapper oben
+  const pointer = -Math.PI / 2; // Zeiger oben
   const jitter = (Math.random() - 0.5) * seg * 0.7;
   const target = pointer - (winner + 0.5) * seg + jitter;
   const start = state.rotation;
   let delta = (target - start) % (Math.PI * 2);
   if (delta < 0) delta += Math.PI * 2;
   delta += Math.PI * 2 * (reduceMotion ? 0 : 5 + Math.floor(Math.random() * 3));
-  const duration = reduceMotion ? 1 : 5200;
+  const duration = reduceMotion ? 1 : 4800;
   const t0 = performance.now();
 
   function frame(now) {
     const t = Math.min(1, (now - t0) / duration);
     const ease = 1 - Math.pow(1 - t, 4);
     state.rotation = start + delta * ease;
-    drawWheel(list, t < 1 ? Math.floor(now / 90) % 3 : -1);
+    drawWheel(list);
     if (t < 1) requestAnimationFrame(frame);
-    else finish(list[winner]);
+    else finish(list[winner], list);
   }
   requestAnimationFrame(frame);
 });
 
-async function finish(rest) {
+async function finish(rest, list) {
   state.rotation %= Math.PI * 2;
+  drawWheel(list, rest.id);
   const { data, error } = await db.from("picks").insert({ restaurant_id: rest.id }).select().single();
   state.spinning = false;
-  $("tab-rad").classList.remove("is-spinning");
   if (error) {
     $("verdict-kicker").textContent = "Die Ziehung ließ sich nicht speichern. Bitte noch mal drehen.";
     $("spin").disabled = false;
@@ -320,8 +304,10 @@ async function finish(rest) {
   }
   state.picks.unshift(data);
   renderToday(true);
-  renderWheel();
   renderHistory();
+  // Rad mit dem Gewinnerfeld stehen lassen; Filter zeichnen es neu
+  const { list: now } = candidates();
+  $("spin").disabled = now.length === 0;
 }
 
 function facts(r) {
@@ -329,19 +315,21 @@ function facts(r) {
   if (r.cuisine) parts.push(r.cuisine);
   if (r.price) parts.push({ 1: "günstig", 2: "mittel", 3: "eher teuer" }[r.price]);
   if (r.walk_minutes != null) parts.push(`${r.walk_minutes} Minuten zu Fuß`);
-  if (r.vegetarian) parts.push("mit Veggie-Auswahl");
+  if (r.vegetarian) parts.push("mit vegetarischer Auswahl");
   return parts.length ? parts.join(", ") + "." : "";
 }
 
 function renderToday(fresh = false) {
   const today = todayBerlin();
+  $("verdict-date").textContent = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", weekday: "long", day: "numeric", month: "long" });
   const pick = state.picks.find((p) => p.pick_date === today);
   const r = pick && state.restaurants.find((x) => x.id === pick.restaurant_id);
   const name = $("verdict-name");
+  const box = $("verdict");
   if (!r) {
-    $("verdict-kicker").textContent = "Heute noch nicht gedreht.";
-    name.textContent = "Wohin geht's?";
-    name.classList.remove("decided");
+    box.classList.remove("decided");
+    $("verdict-kicker").textContent = "Heute noch nicht gedreht";
+    name.textContent = "Wohin geht's heute?";
     $("verdict-facts").textContent = "";
     $("verdict-links").innerHTML = "";
     $("spin").textContent = "Rad drehen";
@@ -349,9 +337,9 @@ function renderToday(fresh = false) {
   }
   const count = state.picks.filter((p) => p.pick_date === today).length;
   const who = nameOf(pick.picked_by);
-  $("verdict-kicker").textContent = count > 1 ? `Heute geht's zu (${count}. Dreh, von ${who})` : `Heute geht's zu (gedreht von ${who})`;
+  box.classList.add("decided");
+  $("verdict-kicker").textContent = count > 1 ? `Heute geht's zu, ${count}. Dreh von ${who}` : `Heute geht's zu, gedreht von ${who}`;
   name.textContent = r.name;
-  name.classList.add("decided");
   if (fresh && !reduceMotion) {
     name.classList.remove("reveal");
     void name.offsetWidth;
@@ -364,6 +352,8 @@ function renderToday(fresh = false) {
   $("verdict-links").innerHTML = links.join(" oder ");
   $("spin").textContent = "Noch mal drehen";
 }
+
+$("quick-add").addEventListener("click", () => openForm(null));
 
 // ---------- Restaurantliste ----------
 

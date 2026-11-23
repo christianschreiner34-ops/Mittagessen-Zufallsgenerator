@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-radius="soft">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mittagsrad</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%238c1c2c'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='white' stroke-width='5'/></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23a1ffcb' stroke='%23232323' stroke-width='4'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='%23232323' stroke-width='4'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -18,7 +18,7 @@
     <form id="login-form" class="card">
       <label for="login-email">Deine E-Mail-Adresse</label>
       <input id="login-email" type="email" required autocomplete="email" placeholder="vorname.nachname@…" />
-      <button class="btn primary" type="submit">Anmeldelink schicken</button>
+      <button class="btn btn--primary" type="submit">Anmeldelink schicken</button>
       <p id="login-msg" class="msg"></p>
     </form>
   </main>
@@ -33,52 +33,63 @@
         <button data-tab="verlauf" class="tab">Verlauf</button>
         <button data-tab="admin" class="tab admin-only hidden">Kollegen</button>
       </nav>
-      <button id="logout" class="btn ghost small">Abmelden</button>
+      <button id="logout" class="btn btn--secondary btn--small">Abmelden</button>
     </header>
 
     <!-- Glücksrad -->
     <section id="tab-rad" class="tab-page rad">
-      <div class="stage">
-        <div class="wheel-wrap">
-          <div class="flapper" aria-hidden="true"></div>
-          <canvas id="wheel" width="720" height="720" aria-label="Glücksrad"></canvas>
-        </div>
-
-        <div class="verdict">
-          <p id="verdict-kicker" class="kicker">Heute noch nicht gedreht.</p>
-          <h1 id="verdict-name" class="verdict-name">Wohin geht's?</h1>
+      <div class="hero">
+        <div class="verdict" id="verdict" data-enter>
+          <p id="verdict-date" class="label"></p>
+          <p id="verdict-kicker" class="kicker">Heute noch nicht gedreht</p>
+          <h1 id="verdict-name" class="verdict-name">Wohin geht's heute?</h1>
           <p id="verdict-facts" class="verdict-facts"></p>
           <p id="verdict-links" class="verdict-links"></p>
-          <button id="spin" class="btn spin">Rad drehen</button>
-
-          <p class="mad-libs">
-            Ins Rad kommt
-            <select id="f-cuisine" aria-label="Küche"><option value="">jede Küche</option></select>,
-            <select id="f-price" aria-label="Preis">
-              <option value="3">egal wie teuer</option>
-              <option value="2">höchstens €€</option>
-              <option value="1">nur günstig (€)</option>
-            </select>,
-            <select id="f-walk" aria-label="Fußweg">
-              <option value="">egal wie weit</option>
-              <option value="5">bis 5 Minuten Fußweg</option>
-              <option value="10">bis 10 Minuten Fußweg</option>
-              <option value="15">bis 15 Minuten Fußweg</option>
-            </select>,
-            <select id="f-veg" aria-label="Vegetarisch">
-              <option value="">mit und ohne Veggie</option>
-              <option value="1">nur mit Veggie-Auswahl</option>
-            </select>.
-            Raus bleibt, was es
-            <select id="f-exclude" aria-label="Ausschließen">
-              <option value="0">zuletzt gab: nichts</option>
-              <option value="1" selected>am letzten Essenstag gab</option>
-              <option value="2">an den letzten 2 Essenstagen gab</option>
-              <option value="3">an den letzten 3 Essenstagen gab</option>
-              <option value="5">an den letzten 5 Essenstagen gab</option>
-            </select>.
-          </p>
+          <div class="btn-row">
+            <button id="spin" class="btn btn--primary">Rad drehen</button>
+            <button id="quick-add" class="btn btn--secondary">Restaurant eintragen</button>
+          </div>
           <p id="f-info" class="f-info"></p>
+        </div>
+
+        <div class="wheel-panel" data-enter-self>
+          <div class="wheel-wrap">
+            <div class="pointer" aria-hidden="true"></div>
+            <canvas id="wheel" width="720" height="720" aria-label="Glücksrad"></canvas>
+          </div>
+        </div>
+        <div class="filters">
+            <label>Küche<select id="f-cuisine"><option value="">Alle</option></select></label>
+            <label>Preis
+              <select id="f-price">
+                <option value="3">Egal</option>
+                <option value="2">Bis €€</option>
+                <option value="1">Nur €</option>
+              </select>
+            </label>
+            <label>Fußweg
+              <select id="f-walk">
+                <option value="">Egal</option>
+                <option value="5">Bis 5 Min.</option>
+                <option value="10">Bis 10 Min.</option>
+                <option value="15">Bis 15 Min.</option>
+              </select>
+            </label>
+            <label>Vegetarisch
+              <select id="f-veg">
+                <option value="">Egal</option>
+                <option value="1">Nur mit Auswahl</option>
+              </select>
+            </label>
+            <label>Zuletzt gegessen
+              <select id="f-exclude">
+                <option value="0">Alle zulassen</option>
+                <option value="1" selected>1 Tag raus</option>
+                <option value="2">2 Tage raus</option>
+                <option value="3">3 Tage raus</option>
+                <option value="5">5 Tage raus</option>
+              </select>
+            </label>
         </div>
       </div>
     </section>
@@ -87,7 +98,7 @@
     <section id="tab-liste" class="tab-page hidden">
       <div class="row-between">
         <h2>Restaurants</h2>
-        <button id="add-restaurant" class="btn primary">+ Restaurant eintragen</button>
+        <button id="add-restaurant" class="btn btn--primary">Restaurant eintragen</button>
       </div>
       <input id="search" type="search" placeholder="Suchen …" />
       <div id="restaurant-list" class="list"></div>
@@ -109,7 +120,7 @@
         <input id="m-email" type="email" required placeholder="E-Mail-Adresse" />
         <input id="m-name" type="text" placeholder="Name (optional)" />
         <label class="check"><input id="m-admin" type="checkbox" /> Admin</label>
-        <button class="btn primary" type="submit">Freigeben</button>
+        <button class="btn btn--primary" type="submit">Freigeben</button>
       </form>
       <p id="member-msg" class="msg"></p>
       <div id="members" class="list"></div>
@@ -142,10 +153,10 @@
       <label class="check"><input id="r-active" type="checkbox" checked /> kommt ins Glücksrad</label>
       <p id="r-msg" class="msg"></p>
       <div class="row-between">
-        <button type="button" id="r-delete" class="btn danger admin-only hidden">Löschen</button>
+        <button type="button" id="r-delete" class="btn btn--danger admin-only hidden">Löschen</button>
         <span class="spacer"></span>
-        <button type="button" id="r-cancel" class="btn ghost">Abbrechen</button>
-        <button type="submit" class="btn primary">Speichern</button>
+        <button type="button" id="r-cancel" class="btn btn--secondary">Abbrechen</button>
+        <button type="submit" class="btn btn--primary">Speichern</button>
       </div>
     </form>
   </dialog>
