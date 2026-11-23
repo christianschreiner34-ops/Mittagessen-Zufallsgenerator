@@ -210,3 +210,8 @@ create policy "Selbst löschen" on public.order_items for delete to authenticate
   using (email = (select public.my_email()));
 grant select, insert, update, delete on public.order_items to authenticated;
 revoke all on public.order_items from anon;
+
+-- ---------- Karte (23.11.2026) ----------
+-- Koordinaten kommen aus der Adresse (OpenStreetMap-Suche im Browser) oder vom Verschieben des Pins.
+alter table public.restaurants add column if not exists lat double precision check (lat between -90 and 90);
+alter table public.restaurants add column if not exists lng double precision check (lng between -180 and 180);

@@ -343,7 +343,7 @@ fieldset.days label.check { margin: 0; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .row-between h2 { margin: 0; }
 .spacer { flex: 1; }
-#search { margin: 24px 0 16px; max-width: 360px; background: var(--g-alt); border-color: transparent; }
+#search { margin: 0; max-width: 360px; background: var(--g-alt); border-color: transparent; }
 #search:focus { border-color: var(--ink); }
 .list {
   display: flex; flex-direction: column; margin-bottom: 48px;
@@ -419,3 +419,32 @@ dialog h2 { margin-bottom: 20px; }
 }
 .filters :disabled, #me-veg:disabled { cursor: default; opacity: .55; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- Restaurants: Kategorien und Karte ---------- */
+.liste-tools { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 24px 0 16px; }
+.liste-tools .seg-field { width: 220px; }
+.liste-tools #search { flex: 1; min-width: 200px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.chips:empty { display: none; }
+.chip {
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink);
+  min-height: 36px; padding: 0 14px; border-radius: var(--r-btn);
+  background: var(--g-alt); border: 1px solid transparent; cursor: pointer;
+  transition: background-color var(--m-in) var(--ease), color var(--m-in) var(--ease);
+}
+.chip span { color: var(--muted); margin-left: 2px; }
+.chip:hover { border-color: var(--line); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--g-main); }
+.chip[aria-pressed="true"] span { color: inherit; opacity: .7; }
+.group-head { font-size: 15px; font-weight: 500; color: var(--muted); margin: 24px 0 8px; }
+.group-head:first-child { margin-top: 0; }
+#restaurant-list .list { margin-bottom: 16px; }
+#restaurant-list > .list:last-child { margin-bottom: 48px; }
+.map { height: min(62vh, 560px); border-radius: var(--r-lg); overflow: hidden; border: 1px solid var(--line); background: var(--g-alt); z-index: 0; }
+.map-note { margin-top: 12px; font-size: 14px; }
+.pin span { display: block; width: 22px; height: 22px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.leaflet-popup-content { font-family: inherit; font-size: 14px; line-height: 1.45; }
+.leaflet-popup-content .btn { margin-top: 8px; background: #fff; color: #232323; border-color: rgba(35, 35, 35, .13); }
+@media (max-width: 720px) {
+  .liste-tools .seg-field, .liste-tools #search { width: 100%; flex-basis: 100%; }
+}
