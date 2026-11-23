@@ -1,10 +1,13 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-radius="soft">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mittagsrad</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23e8590c'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='white' stroke-width='5'/></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230b3d2a' stroke='%23232323' stroke-width='4'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='%23232323' stroke-width='4'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,7 +18,7 @@
     <form id="login-form" class="card">
       <label for="login-email">Deine E-Mail-Adresse</label>
       <input id="login-email" type="email" required autocomplete="email" placeholder="vorname.nachname@…" />
-      <button class="btn primary" type="submit">Anmeldelink schicken</button>
+      <button class="btn btn--primary" type="submit">Anmeldelink schicken</button>
       <p id="login-msg" class="msg"></p>
     </form>
   </main>
@@ -23,57 +26,70 @@
   <!-- App -->
   <div id="view-app" class="hidden">
     <header class="topbar">
-      <strong>Mittagsrad</strong>
+      <span class="brand">Mittagsrad</span>
       <nav id="tabs">
-        <button data-tab="rad" class="tab active">Glücksrad</button>
-        <button data-tab="liste" class="tab">Restaurants</button>
-        <button data-tab="verlauf" class="tab">Verlauf</button>
-        <button data-tab="admin" class="tab admin-only hidden">Kollegen</button>
+        <button data-tab="rad" class="tab active"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg><span>Glücksrad</span></button>
+        <button data-tab="liste" class="tab"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Restaurants</span></button>
+        <button data-tab="verlauf" class="tab"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Verlauf</span></button>
+        <button data-tab="admin" class="tab admin-only hidden"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .7 3.2 2.5 3.6 5.2"/></svg><span>Kollegen</span></button>
       </nav>
-      <button id="logout" class="btn ghost small">Abmelden</button>
+      <button id="logout" class="btn btn--secondary btn--small">Abmelden</button>
     </header>
 
     <!-- Glücksrad -->
-    <section id="tab-rad" class="tab-page">
-      <div id="today" class="card today hidden"></div>
-      <div class="rad-layout">
-        <div class="wheel-wrap">
-          <div class="pointer"></div>
-          <canvas id="wheel" width="560" height="560"></canvas>
-          <button id="spin" class="btn primary big">Drehen</button>
+    <section id="tab-rad" class="tab-page rad">
+      <div class="hero">
+        <div class="verdict" id="verdict" data-enter>
+          <p id="verdict-date" class="label"></p>
+          <p id="verdict-kicker" class="kicker">Heute noch nicht gedreht</p>
+          <h1 id="verdict-name" class="verdict-name">Wohin geht's heute?</h1>
+          <p id="verdict-facts" class="verdict-facts"></p>
+          <p id="verdict-links" class="verdict-links"></p>
+          <div class="btn-row">
+            <button id="spin" class="btn btn--primary">Rad drehen</button>
+            <button id="quick-add" class="btn btn--secondary">Restaurant eintragen</button>
+          </div>
+          <p id="f-info" class="f-info"></p>
         </div>
-        <div class="card filters">
-          <h2>Was kommt ins Rad?</h2>
-          <label>Ausschließen, was es zuletzt gab
-            <select id="f-exclude">
-              <option value="0">nichts ausschließen</option>
-              <option value="1" selected>letzter Essenstag (gestern)</option>
-              <option value="2">letzte 2 Essenstage</option>
-              <option value="3">letzte 3 Essenstage</option>
-              <option value="5">letzte 5 Essenstage</option>
-            </select>
-          </label>
-          <label>Küche
-            <select id="f-cuisine"><option value="">alle</option></select>
-          </label>
-          <label>Preis höchstens
-            <select id="f-price">
-              <option value="3">egal</option>
-              <option value="2">€€</option>
-              <option value="1">€</option>
-            </select>
-          </label>
-          <label>Fußweg höchstens
-            <select id="f-walk">
-              <option value="">egal</option>
-              <option value="5">5 Minuten</option>
-              <option value="10">10 Minuten</option>
-              <option value="15">15 Minuten</option>
-            </select>
-          </label>
-          <label class="check"><input id="f-veg" type="checkbox" /> nur mit vegetarischer Auswahl</label>
-          <p id="f-info" class="muted"></p>
-          <div id="f-excluded" class="muted small"></div>
+
+        <div class="wheel-panel" data-enter-self>
+          <div class="wheel-wrap">
+            <div class="pointer" aria-hidden="true"></div>
+            <canvas id="wheel" width="720" height="720" aria-label="Glücksrad"></canvas>
+          </div>
+        </div>
+        <div class="filters">
+            <label>Küche<select id="f-cuisine"><option value="">Alle</option></select></label>
+            <label>Zuletzt gegessen
+              <select id="f-exclude">
+                <option value="0">Alle zulassen</option>
+                <option value="1" selected>Letzten Tag raus</option>
+                <option value="2">Letzte 2 Tage raus</option>
+                <option value="3">Letzte 3 Tage raus</option>
+                <option value="5">Letzte 5 Tage raus</option>
+              </select>
+            </label>
+            <div class="seg-field"><span class="seg-label" id="l-price">Preis</span>
+              <select id="f-price" class="seg-source" aria-labelledby="l-price">
+                <option value="3">Egal</option>
+                <option value="2">Bis €€</option>
+                <option value="1">Nur €</option>
+              </select>
+            </div>
+            <div class="seg-field"><span class="seg-label" id="l-veg">Vegetarisch</span>
+              <select id="f-veg" class="seg-source" aria-labelledby="l-veg">
+                <option value="">Egal</option>
+                <option value="1">Mit Auswahl</option>
+              </select>
+            </div>
+            <div class="seg-field wide"><span class="seg-label" id="l-walk">Fußweg bis</span>
+              <select id="f-walk" class="seg-source" aria-labelledby="l-walk">
+                <option value="">Egal</option>
+                <option value="5">5 Min.</option>
+                <option value="10">10 Min.</option>
+                <option value="15">15 Min.</option>
+              </select>
+            </div>
         </div>
       </div>
     </section>
@@ -82,7 +98,7 @@
     <section id="tab-liste" class="tab-page hidden">
       <div class="row-between">
         <h2>Restaurants</h2>
-        <button id="add-restaurant" class="btn primary">+ Restaurant eintragen</button>
+        <button id="add-restaurant" class="btn btn--primary">Restaurant eintragen</button>
       </div>
       <input id="search" type="search" placeholder="Suchen …" />
       <div id="restaurant-list" class="list"></div>
@@ -104,7 +120,7 @@
         <input id="m-email" type="email" required placeholder="E-Mail-Adresse" />
         <input id="m-name" type="text" placeholder="Name (optional)" />
         <label class="check"><input id="m-admin" type="checkbox" /> Admin</label>
-        <button class="btn primary" type="submit">Freigeben</button>
+        <button class="btn btn--primary" type="submit">Freigeben</button>
       </form>
       <p id="member-msg" class="msg"></p>
       <div id="members" class="list"></div>
@@ -137,10 +153,10 @@
       <label class="check"><input id="r-active" type="checkbox" checked /> kommt ins Glücksrad</label>
       <p id="r-msg" class="msg"></p>
       <div class="row-between">
-        <button type="button" id="r-delete" class="btn danger admin-only hidden">Löschen</button>
+        <button type="button" id="r-delete" class="btn btn--danger admin-only hidden">Löschen</button>
         <span class="spacer"></span>
-        <button type="button" id="r-cancel" class="btn ghost">Abbrechen</button>
-        <button type="submit" class="btn primary">Speichern</button>
+        <button type="button" id="r-cancel" class="btn btn--secondary">Abbrechen</button>
+        <button type="submit" class="btn btn--primary">Speichern</button>
       </div>
     </form>
   </dialog>

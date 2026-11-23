@@ -83,12 +83,14 @@ async function start(session) {
   await loadAll();
   const me = state.members.find((m) => m.email === state.email);
   if (!me) {
-    document.querySelector("#view-app").innerHTML = '<main class="login"><h1>Kein Zugang</h1><p class="muted">Deine Adresse ist nicht (mehr) freigegeben.</p><button class="btn ghost" onclick="db.auth.signOut().then(()=>location.reload())">Abmelden</button></main>';
+    document.querySelector("#view-app").innerHTML = '<main class="login"><h1>Kein Zugang</h1><p class="muted">Deine Adresse ist nicht (mehr) freigegeben.</p><button class="btn btn--secondary" onclick="db.auth.signOut().then(()=>location.reload())">Abmelden</button></main>';
     return;
   }
   state.admin = me.is_admin;
   document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("hidden", !state.admin));
   renderAll();
+  // Das Rad erst neu zeichnen, wenn die Schrift geladen ist
+  document.fonts?.ready.then(() => renderWheel());
 }
 
 // ---------- Daten ----------
@@ -144,7 +146,7 @@ function candidates() {
   const cuisine = $("f-cuisine").value;
   const maxPrice = Number($("f-price").value);
   const maxWalk = $("f-walk").value ? Number($("f-walk").value) : null;
-  const veg = $("f-veg").checked;
+  const veg = $("f-veg").value === "1";
   const list = state.restaurants.filter(
     (r) =>
       r.active &&
@@ -158,86 +160,152 @@ function candidates() {
 }
 
 ["f-exclude", "f-cuisine", "f-price", "f-walk", "f-veg"].forEach((id) => $(id).addEventListener("change", renderWheel));
+// Segmentierte Auswahl (wie bei iOS) für Filter mit wenigen Möglichkeiten.
+// Das <select> bleibt die Quelle der Wahrheit, die Knöpfe setzen nur seinen Wert.
+document.querySelectorAll("select.seg-source").forEach((sel) => {
+  const group = document.createElement("div");
+  group.className = "seg";
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-labelledby", sel.getAttribute("aria-labelledby"));
+  const buttons = [...sel.options].map((opt) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "seg-btn";
+    b.setAttribute("role", "radio");
+    b.textContent = opt.textContent;
+    b.addEventListener("click", () => {
+      if (sel.value === opt.value) return;
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event("change"));
+    });
+    group.appendChild(b);
+    return { b, opt };
+  });
+  const sync = () => {
+    buttons.forEach(({ b, opt }, i) => {
+      const on = opt.value === sel.value;
+      b.setAttribute("aria-checked", on);
+      b.tabIndex = on ? 0 : -1;
+      if (on) group.style.setProperty("--i", i);
+    });
+  };
+  group.style.setProperty("--n", buttons.length);
+  group.addEventListener("keydown", (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const i = (sel.selectedIndex + step + buttons.length) % buttons.length;
+    buttons[i].b.click();
+    buttons[i].b.focus();
+  });
+  sel.addEventListener("change", sync);
+  sel.hidden = true;
+  sel.insertAdjacentElement("afterend", group);
+  sync();
+});
+
 
 function renderCuisineOptions() {
   const cuisines = [...new Set(state.restaurants.map((r) => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
   const sel = $("f-cuisine");
   const current = sel.value;
-  sel.innerHTML = '<option value="">alle</option>' + cuisines.map((c) => `<option>${esc(c)}</option>`).join("");
+  sel.innerHTML = '<option value="">Alle</option>' + cuisines.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
   sel.value = cuisines.includes(current) ? current : "";
   $("cuisine-list").innerHTML = cuisines.map((c) => `<option value="${esc(c)}">`).join("");
 }
 
 function renderWheel() {
   const { list, exclude } = candidates();
-  drawWheel(list);
+  const todays = state.picks.find((p) => p.pick_date === todayBerlin());
+  drawWheel(list, todays?.restaurant_id);
   const active = state.restaurants.filter((r) => r.active).length;
-  $("f-info").textContent = `${list.length} von ${active} Restaurants im Rad.`;
+  const names = [...exclude.keys()].map((id) => state.restaurants.find((x) => x.id === id)?.name).filter(Boolean);
+  let info = `${list.length} von ${active} Restaurants im Rad.`;
+  if (names.length) info += ` Nicht dabei, weil es das zuletzt gab: ${names.join(", ")}.`;
+  $("f-info").textContent = info;
   $("spin").disabled = list.length === 0 || state.spinning;
-  const names = [...exclude.entries()].map(([id, day]) => {
-    const r = state.restaurants.find((x) => x.id === id);
-    return r ? `${r.name} (${formatDate(day)})` : null;
-  }).filter(Boolean);
-  $("f-excluded").textContent = names.length ? "Ausgeschlossen: " + names.join(", ") : "";
 }
 
-function drawWheel(list) {
+// Rad in den Farben der Seite: Weiß und Hellgrau im Wechsel, Mint nur für das Gewinnerfeld.
+const darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+const WHEEL = darkMode
+  ? { a: "#1f1f1f", b: "#2a2a2a", ink: "#f1f1f1", line: "rgba(241,241,241,.16)", win: "#145a3d", winInk: "#ffffff" }
+  : { a: "#ffffff", b: "#e9e9e9", ink: "#232323", line: "rgba(35,35,35,.16)", win: "#0b3d2a", winInk: "#ffffff" };
+
+function drawWheel(list, winnerId = null) {
   const c = $("wheel");
   const ctx = c.getContext("2d");
   const size = c.width;
-  const r = size / 2 - 6;
+  const R = size / 2;
+  const r = R - 4;
   ctx.clearRect(0, 0, size, size);
   ctx.save();
-  ctx.translate(size / 2, size / 2);
+  ctx.translate(R, R);
 
   if (list.length === 0) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = "#ccc";
+    ctx.fillStyle = WHEEL.a;
     ctx.fill();
-    ctx.fillStyle = "#333";
-    ctx.font = "600 22px system-ui";
+    ctx.strokeStyle = WHEEL.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = WHEEL.ink;
+    ctx.font = "500 30px 'Host Grotesk', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(state.restaurants.length ? "Nichts passt zu den Filtern" : "Noch keine Restaurants", 0, 8);
+    ctx.fillText(state.restaurants.length ? "Nichts passt zu den Filtern" : "Noch keine Restaurants", 0, 10);
     ctx.restore();
     return;
   }
 
-  const seg = (Math.PI * 2) / list.length;
+  const n = list.length;
+  const seg = (Math.PI * 2) / n;
   list.forEach((rest, i) => {
     const a0 = state.rotation + i * seg;
+    const isWin = rest.id === winnerId;
+    let fill = i % 2 === 0 ? WHEEL.a : WHEEL.b;
+    if (n % 2 === 1 && i === n - 1 && n > 1) fill = darkMode ? "#343434" : "#dcdcdc";
+    if (isWin) fill = WHEEL.win;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.arc(0, 0, r, a0, a0 + seg);
     ctx.closePath();
-    // bei ungerader Anzahl nicht zwei gleiche Farben nebeneinander
-    let color = COLORS[i % COLORS.length];
-    if (i === list.length - 1 && i % COLORS.length === 0 && i > 0) color = COLORS[(i + 3) % COLORS.length];
-    ctx.fillStyle = color;
+    ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.7)";
+    ctx.strokeStyle = WHEEL.line;
     ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.save();
-    ctx.rotate(a0 + seg / 2);
-    ctx.fillStyle = "#fff";
-    const fontSize = Math.max(13, Math.min(24, 300 / list.length + 8));
-    ctx.font = `600 ${fontSize}px system-ui`;
-    ctx.textAlign = "right";
+    const mid = a0 + seg / 2;
+    const flip = Math.cos(mid) < 0;
+    ctx.rotate(flip ? mid + Math.PI : mid);
+    ctx.fillStyle = isWin ? WHEEL.winInk : WHEEL.ink;
+    const fontSize = Math.round(Math.max(18, Math.min(32, 360 / n + 4)));
+    ctx.font = `500 ${fontSize}px 'Host Grotesk', sans-serif`;
+    ctx.textAlign = flip ? "left" : "right";
     ctx.textBaseline = "middle";
     let label = rest.name;
-    while (ctx.measureText(label).width > r - 50 && label.length > 3) label = label.slice(0, -2) + "…";
-    ctx.fillText(label, r - 16, 0);
+    const maxW = r - 92;
+    while (ctx.measureText(label).width > maxW && label.length > 3) label = label.slice(0, -2) + "…";
+    ctx.fillText(label, flip ? -(r - 28) : r - 28, 1);
     ctx.restore();
   });
 
   ctx.beginPath();
-  ctx.arc(0, 0, 26, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.strokeStyle = WHEEL.line;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(0, 0, 30, 0, Math.PI * 2);
+  ctx.fillStyle = WHEEL.ink;
   ctx.fill();
   ctx.restore();
 }
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 $("spin").addEventListener("click", () => {
   const { list } = candidates();
@@ -253,8 +321,8 @@ $("spin").addEventListener("click", () => {
   const start = state.rotation;
   let delta = (target - start) % (Math.PI * 2);
   if (delta < 0) delta += Math.PI * 2;
-  delta += Math.PI * 2 * (5 + Math.floor(Math.random() * 3));
-  const duration = 4500;
+  delta += Math.PI * 2 * (reduceMotion ? 0 : 5 + Math.floor(Math.random() * 3));
+  const duration = reduceMotion ? 1 : 4800;
   const t0 = performance.now();
 
   function frame(now) {
@@ -263,51 +331,73 @@ $("spin").addEventListener("click", () => {
     state.rotation = start + delta * ease;
     drawWheel(list);
     if (t < 1) requestAnimationFrame(frame);
-    else finish(list[winner]);
+    else finish(list[winner], list);
   }
   requestAnimationFrame(frame);
 });
 
-async function finish(rest) {
+async function finish(rest, list) {
   state.rotation %= Math.PI * 2;
+  drawWheel(list, rest.id);
   const { data, error } = await db.from("picks").insert({ restaurant_id: rest.id }).select().single();
   state.spinning = false;
   if (error) {
-    alert("Ziehung konnte nicht gespeichert werden: " + error.message);
-  } else {
-    state.picks.unshift(data);
+    $("verdict-kicker").textContent = "Die Ziehung ließ sich nicht speichern. Bitte noch mal drehen.";
+    $("spin").disabled = false;
+    return;
   }
+  state.picks.unshift(data);
   renderToday(true);
-  renderWheel();
   renderHistory();
+  // Rad mit dem Gewinnerfeld stehen lassen; Filter zeichnen es neu
+  const { list: now } = candidates();
+  $("spin").disabled = now.length === 0;
+}
+
+function facts(r) {
+  const parts = [];
+  if (r.cuisine) parts.push(r.cuisine);
+  if (r.price) parts.push({ 1: "günstig", 2: "mittel", 3: "eher teuer" }[r.price]);
+  if (r.walk_minutes != null) parts.push(`${r.walk_minutes} Minuten zu Fuß`);
+  if (r.vegetarian) parts.push("mit vegetarischer Auswahl");
+  return parts.length ? parts.join(", ") + "." : "";
 }
 
 function renderToday(fresh = false) {
   const today = todayBerlin();
+  $("verdict-date").textContent = new Date().toLocaleDateString("de-DE", { timeZone: "Europe/Berlin", weekday: "long", day: "numeric", month: "long" });
   const pick = state.picks.find((p) => p.pick_date === today);
-  const box = $("today");
-  if (!pick) {
-    box.classList.add("hidden");
-    $("spin").textContent = "Drehen";
+  const r = pick && state.restaurants.find((x) => x.id === pick.restaurant_id);
+  const name = $("verdict-name");
+  const box = $("verdict");
+  if (!r) {
+    box.classList.remove("decided");
+    $("verdict-kicker").textContent = "Heute noch nicht gedreht";
+    name.textContent = "Wohin geht's heute?";
+    $("verdict-facts").textContent = "";
+    $("verdict-links").innerHTML = "";
+    $("spin").textContent = "Rad drehen";
     return;
   }
-  const r = state.restaurants.find((x) => x.id === pick.restaurant_id);
-  if (!r) return box.classList.add("hidden");
-  const maps = r.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + " " + r.address)}` : null;
   const count = state.picks.filter((p) => p.pick_date === today).length;
-  box.innerHTML = `
-    <div class="muted small">${fresh ? "Das Rad hat entschieden" : "Heute geht's zu"}${count > 1 ? ` (${count}. Versuch)` : ""}</div>
-    <div class="name">${esc(r.name)}</div>
-    <div class="muted">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min. zu Fuß" : null].filter(Boolean).map(esc).join(" · ")}</div>
-    ${r.notes ? `<div class="small">${esc(r.notes)}</div>` : ""}
-    <div class="small">
-      ${maps ? `<a href="${maps}" target="_blank" rel="noopener">Route</a>` : ""}
-      ${r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">Webseite</a>` : ""}
-      · gedreht von ${esc(nameOf(pick.picked_by))}
-    </div>`;
-  box.classList.remove("hidden");
-  $("spin").textContent = "Nochmal drehen";
+  const who = nameOf(pick.picked_by);
+  box.classList.add("decided");
+  $("verdict-kicker").textContent = count > 1 ? `Heute geht's zu, ${count}. Dreh von ${who}` : `Heute geht's zu, gedreht von ${who}`;
+  name.textContent = r.name;
+  if (fresh && !reduceMotion) {
+    name.classList.remove("reveal");
+    void name.offsetWidth;
+    name.classList.add("reveal");
+  }
+  $("verdict-facts").textContent = [facts(r), r.notes].filter(Boolean).join(" ");
+  const links = [];
+  if (r.address) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + " " + r.address)}" target="_blank" rel="noopener">Route in Google Maps</a>`);
+  if (r.url) links.push(`<a href="${esc(r.url)}" target="_blank" rel="noopener">Speisekarte</a>`);
+  $("verdict-links").innerHTML = links.join(" oder ");
+  $("spin").textContent = "Noch mal drehen";
 }
+
+$("quick-add").addEventListener("click", () => openForm(null));
 
 // ---------- Restaurantliste ----------
 
@@ -326,7 +416,7 @@ function renderList() {
           <div class="sub">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min." : null, r.address].filter(Boolean).map(esc).join(" · ")}</div>
           ${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}
         </div>
-        <button class="btn ghost small" data-edit="${r.id}">Bearbeiten</button>
+        <button class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>
       </div>`
         )
         .join("")
@@ -405,7 +495,7 @@ function renderHistory() {
           const tries = state.picks.filter((x) => x.pick_date === p.pick_date).length;
           return `<div class="item"><div class="main"><div class="title">${esc(byId[p.restaurant_id]?.name || "gelöscht")}</div>
           <div class="sub">${formatDate(p.pick_date)} · gedreht von ${esc(nameOf(p.picked_by))}${tries > 1 ? ` · ${tries} Versuche` : ""}</div></div>
-          ${state.admin ? `<button class="btn ghost small" data-undo="${p.id}">Entfernen</button>` : ""}</div>`;
+          ${state.admin ? `<button class="btn btn--plain btn--small btn--destructive" data-undo="${p.id}">Entfernen</button>` : ""}</div>`;
         })
         .join("")
     : '<p class="muted">Noch nicht gedreht.</p>';
@@ -424,7 +514,7 @@ function renderHistory() {
   days.forEach((p) => (counts[p.restaurant_id] = (counts[p.restaurant_id] || 0) + 1));
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   $("stats").innerHTML = top.length
-    ? top.map(([id, n]) => `<div class="item"><div class="main">${esc(byId[id]?.name || "gelöscht")}</div><strong>${n}×</strong></div>`).join("")
+    ? top.map(([id, n]) => `<div class="item"><div class="main">${esc(byId[id]?.name || "gelöscht")}</div><span class="count">${n}-mal</span></div>`).join("")
     : '<p class="muted">Noch keine Daten.</p>';
 }
 
@@ -436,7 +526,7 @@ function renderMembers() {
     .map(
       (m) => `<div class="item"><div class="main"><div class="title">${esc(m.display_name || m.email)}${m.is_admin ? '<span class="tag">Admin</span>' : ""}</div>
       <div class="sub">${esc(m.email)}</div></div>
-      ${m.email !== state.email ? `<button class="btn ghost small" data-remove="${esc(m.email)}">Entfernen</button>` : ""}</div>`
+      ${m.email !== state.email ? `<button class="btn btn--plain btn--small btn--destructive" data-remove="${esc(m.email)}">Entfernen</button>` : ""}</div>`
     )
     .join("");
   document.querySelectorAll("[data-remove]").forEach((b) =>
