@@ -1,7 +1,8 @@
 /* Mittagsrad
    Aufgebaut nach dem Skill design-taste-frontend (Seitentyp software):
-   Palette "Greys and mint": Weiß, Fast-Schwarz, zwei Grautöne; Mint flutet nur
-   die Entscheidung (das Gewinnerfeld und die Kachel "Heute geht's zu").
+   Weiß, Fast-Schwarz, zwei Grautöne; ein dunkles British Racing Green (angelehnt
+   an Porsches "Verde British Racing Green") flutet nur die Entscheidung
+   (das Gewinnerfeld und die Kachel "Heute geht's zu").
    Schrift: Host Grotesk, Überschriften 500 mit engem Laufweite, Text 400.
    Radius soft (8/12/20), Buttons solid.
    Danach nach dem Skill apple-design (Apple Human Interface Guidelines) nachgeschärft:
@@ -15,8 +16,8 @@
   --ink: #232323;
   --muted: #636363;
   --line: rgba(35, 35, 35, .13);
-  --accent: #a1ffcb;
-  --accent-ink: #232323;
+  --accent: #0b3d2a;
+  --accent-ink: #ffffff;
   --action: #232323;
   --danger: #b3261e;
   --ok: #1d6b3f;
@@ -28,6 +29,7 @@
   --r-lg: 24px; --r-md: 14px; --r-sm: 12px; --r-btn: 999px;
   --btn-h: 48px;
   --bar: rgba(255, 255, 255, .78);
+  --logo-b: #d4d4d4;
   --thumb: #ffffff;
   --thumb-shadow: 0 1px 2px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.08);
   --ease: cubic-bezier(.2, .8, .2, 1);
@@ -44,7 +46,9 @@
     --action: #f1f1f1;
     --danger: #ff8a80;
     --ok: #8fe0b0;
+    --accent: #145a3d;
     --bar: rgba(20, 20, 20, .78);
+    --logo-b: #4a4a4a;
     --thumb: #3a3a3a;
     --thumb-shadow: 0 1px 2px rgba(0,0,0,.4);
   }
@@ -118,6 +122,8 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 }
 .btn--primary { background: var(--action); color: var(--g-main); border-color: var(--action); }
 .btn--danger { color: var(--danger); border-color: currentColor; background: transparent; }
+.btn--plain { border-color: transparent; background: transparent; }
+.btn--destructive { color: var(--danger); }
 .btn--small { height: 36px; padding: 0 16px; font-size: 15px; }
 @media (hover: hover) and (pointer: fine) {
   .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--ink); }
@@ -148,7 +154,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 18px; letter-spacing: -0.02em; }
 .brand::before {
   content: ""; width: 20px; height: 20px; border-radius: 50%;
-  background: conic-gradient(var(--accent) 0 25%, var(--ink) 0 50%, var(--accent) 0 75%, var(--ink) 0);
+  background: conic-gradient(var(--accent) 0 25%, var(--logo-b) 0 50%, var(--accent) 0 75%, var(--logo-b) 0);
 }
 #tabs { display: flex; gap: 2px; padding: 3px; background: var(--g-alt); border-radius: 999px; overflow-x: auto; scrollbar-width: none; }
 .tab {
@@ -176,10 +182,11 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 }
 .verdict { grid-area: verdict; padding: 32px; border-radius: var(--r-lg); transition: background-color 400ms var(--ease); }
 .verdict.decided { background: var(--accent); color: var(--accent-ink); }
-.verdict.decided .label, .verdict.decided .kicker, .verdict.decided .f-info { color: color-mix(in srgb, var(--accent-ink) 72%, var(--accent)); }
+.verdict.decided .label, .verdict.decided .kicker, .verdict.decided .f-info { color: color-mix(in srgb, var(--accent-ink) 78%, var(--accent)); }
 .verdict.decided .btn--primary { background: var(--accent-ink); color: var(--accent); border-color: var(--accent-ink); }
-.verdict.decided .btn--secondary { background: transparent; border-color: rgba(35,35,35,.3); color: var(--accent-ink); }
-.verdict.decided a { color: var(--accent-ink); text-decoration-color: rgba(35,35,35,.35); }
+.verdict.decided .btn--secondary { background: transparent; border-color: rgba(255,255,255,.35); color: var(--accent-ink); }
+.verdict.decided :focus-visible { outline-color: var(--accent-ink); }
+.verdict.decided a { color: var(--accent-ink); text-decoration-color: rgba(255,255,255,.45); }
 .kicker { margin: 4px 0 12px; font-size: 19px; color: var(--muted); }
 .verdict-name {
   font-size: clamp(40px, 5.2vw, 72px);
@@ -265,19 +272,26 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .row-between h2 { margin: 0; }
 .spacer { flex: 1; }
-#search { margin: 24px 0 16px; max-width: 360px; }
-.list { display: flex; flex-direction: column; margin-bottom: 48px; border-top: 1px solid var(--line); }
+#search { margin: 24px 0 16px; max-width: 360px; background: var(--g-alt); border-color: transparent; }
+#search:focus { border-color: var(--ink); }
+.list {
+  display: flex; flex-direction: column; margin-bottom: 48px;
+  background: var(--g-alt); border-radius: var(--r-lg); padding: 0 24px;
+}
+.list > p.muted { margin: 0; padding: 20px 0; }
 .item {
   display: flex; align-items: center; gap: 16px;
-  padding: 14px 0;
+  min-height: 64px; padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
+.item:last-child { border-bottom: 0; }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .item .main { flex: 1; min-width: 0; }
 .item .title { font-weight: 500; font-size: 18px; }
 .item .sub { color: var(--muted); font-size: 15px; }
 .item.inactive .title { color: var(--muted); }
 .tag { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 8px; }
-.card { background: var(--g-alt); border-radius: var(--r-md); padding: 24px; }
+.card { background: var(--g-alt); border-radius: var(--r-lg); padding: 24px; }
 .login form.card { background: transparent; padding: 0; }
 .inline-form { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
 .inline-form input[type=email], .inline-form input[type=text] { flex: 1; min-width: 200px; margin: 0; }
@@ -288,7 +302,8 @@ dialog {
   width: min(520px, calc(100vw - 32px));
   background: var(--g-main); color: var(--ink);
 }
-dialog::backdrop { background: rgb(20 20 20 / .45); }
+dialog::backdrop { background: rgb(20 20 20 / .45); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+dialog h2 { margin-bottom: 20px; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 @media (max-width: 960px) {
@@ -323,4 +338,10 @@ dialog::backdrop { background: rgb(20 20 20 / .45); }
   .verdict { padding: 24px 20px; }
   .btn-row .btn { width: 100%; }
   .btn--small { height: 44px; }
+  .list { padding: 0 16px; }
+  .item { flex-wrap: wrap; }
+  .item .btn { width: auto; }
+  #search { max-width: none; }
+  .inline-form > * { flex-basis: 100%; }
+  .inline-form .btn { width: 100%; }
 }

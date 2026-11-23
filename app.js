@@ -83,7 +83,7 @@ async function start(session) {
   await loadAll();
   const me = state.members.find((m) => m.email === state.email);
   if (!me) {
-    document.querySelector("#view-app").innerHTML = '<main class="login"><h1>Kein Zugang</h1><p class="muted">Deine Adresse ist nicht (mehr) freigegeben.</p><button class="btn ghost" onclick="db.auth.signOut().then(()=>location.reload())">Abmelden</button></main>';
+    document.querySelector("#view-app").innerHTML = '<main class="login"><h1>Kein Zugang</h1><p class="muted">Deine Adresse ist nicht (mehr) freigegeben.</p><button class="btn btn--secondary" onclick="db.auth.signOut().then(()=>location.reload())">Abmelden</button></main>';
     return;
   }
   state.admin = me.is_admin;
@@ -229,8 +229,8 @@ function renderWheel() {
 // Rad in den Farben der Seite: Weiß und Hellgrau im Wechsel, Mint nur für das Gewinnerfeld.
 const darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
 const WHEEL = darkMode
-  ? { a: "#1f1f1f", b: "#2a2a2a", ink: "#f1f1f1", line: "rgba(241,241,241,.16)", win: "#a1ffcb", winInk: "#232323" }
-  : { a: "#ffffff", b: "#e9e9e9", ink: "#232323", line: "rgba(35,35,35,.16)", win: "#a1ffcb", winInk: "#232323" };
+  ? { a: "#1f1f1f", b: "#2a2a2a", ink: "#f1f1f1", line: "rgba(241,241,241,.16)", win: "#145a3d", winInk: "#ffffff" }
+  : { a: "#ffffff", b: "#e9e9e9", ink: "#232323", line: "rgba(35,35,35,.16)", win: "#0b3d2a", winInk: "#ffffff" };
 
 function drawWheel(list, winnerId = null) {
   const c = $("wheel");
@@ -416,7 +416,7 @@ function renderList() {
           <div class="sub">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min." : null, r.address].filter(Boolean).map(esc).join(" · ")}</div>
           ${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}
         </div>
-        <button class="btn ghost small" data-edit="${r.id}">Bearbeiten</button>
+        <button class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>
       </div>`
         )
         .join("")
@@ -495,7 +495,7 @@ function renderHistory() {
           const tries = state.picks.filter((x) => x.pick_date === p.pick_date).length;
           return `<div class="item"><div class="main"><div class="title">${esc(byId[p.restaurant_id]?.name || "gelöscht")}</div>
           <div class="sub">${formatDate(p.pick_date)} · gedreht von ${esc(nameOf(p.picked_by))}${tries > 1 ? ` · ${tries} Versuche` : ""}</div></div>
-          ${state.admin ? `<button class="btn ghost small" data-undo="${p.id}">Entfernen</button>` : ""}</div>`;
+          ${state.admin ? `<button class="btn btn--plain btn--small btn--destructive" data-undo="${p.id}">Entfernen</button>` : ""}</div>`;
         })
         .join("")
     : '<p class="muted">Noch nicht gedreht.</p>';
@@ -514,7 +514,7 @@ function renderHistory() {
   days.forEach((p) => (counts[p.restaurant_id] = (counts[p.restaurant_id] || 0) + 1));
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   $("stats").innerHTML = top.length
-    ? top.map(([id, n]) => `<div class="item"><div class="main">${esc(byId[id]?.name || "gelöscht")}</div><strong>${n}×</strong></div>`).join("")
+    ? top.map(([id, n]) => `<div class="item"><div class="main">${esc(byId[id]?.name || "gelöscht")}</div><span class="count">${n}-mal</span></div>`).join("")
     : '<p class="muted">Noch keine Daten.</p>';
 }
 
@@ -526,7 +526,7 @@ function renderMembers() {
     .map(
       (m) => `<div class="item"><div class="main"><div class="title">${esc(m.display_name || m.email)}${m.is_admin ? '<span class="tag">Admin</span>' : ""}</div>
       <div class="sub">${esc(m.email)}</div></div>
-      ${m.email !== state.email ? `<button class="btn ghost small" data-remove="${esc(m.email)}">Entfernen</button>` : ""}</div>`
+      ${m.email !== state.email ? `<button class="btn btn--plain btn--small btn--destructive" data-remove="${esc(m.email)}">Entfernen</button>` : ""}</div>`
     )
     .join("");
   document.querySelectorAll("[data-remove]").forEach((b) =>
