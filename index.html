@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mittagsrad</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23e8590c'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='white' stroke-width='5'/></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Anmeldung -->
+  <main id="view-login" class="login hidden">
+    <h1>Mittagsrad</h1>
+    <p class="muted">Wohin gehen wir heute essen? Anmeldung nur für freigegebene Kollegen.</p>
+    <form id="login-form" class="card">
+      <label for="login-email">Deine E-Mail-Adresse</label>
+      <input id="login-email" type="email" required autocomplete="email" placeholder="vorname.nachname@…" />
+      <button class="btn primary" type="submit">Anmeldelink schicken</button>
+      <p id="login-msg" class="msg"></p>
+    </form>
+  </main>
+
+  <!-- App -->
+  <div id="view-app" class="hidden">
+    <header class="topbar">
+      <strong>Mittagsrad</strong>
+      <nav id="tabs">
+        <button data-tab="rad" class="tab active">Glücksrad</button>
+        <button data-tab="liste" class="tab">Restaurants</button>
+        <button data-tab="verlauf" class="tab">Verlauf</button>
+        <button data-tab="admin" class="tab admin-only hidden">Kollegen</button>
+      </nav>
+      <button id="logout" class="btn ghost small">Abmelden</button>
+    </header>
+
+    <!-- Glücksrad -->
+    <section id="tab-rad" class="tab-page">
+      <div id="today" class="card today hidden"></div>
+      <div class="rad-layout">
+        <div class="wheel-wrap">
+          <div class="pointer"></div>
+          <canvas id="wheel" width="560" height="560"></canvas>
+          <button id="spin" class="btn primary big">Drehen</button>
+        </div>
+        <div class="card filters">
+          <h2>Was kommt ins Rad?</h2>
+          <label>Ausschließen, was es zuletzt gab
+            <select id="f-exclude">
+              <option value="0">nichts ausschließen</option>
+              <option value="1" selected>letzter Essenstag (gestern)</option>
+              <option value="2">letzte 2 Essenstage</option>
+              <option value="3">letzte 3 Essenstage</option>
+              <option value="5">letzte 5 Essenstage</option>
+            </select>
+          </label>
+          <label>Küche
+            <select id="f-cuisine"><option value="">alle</option></select>
+          </label>
+          <label>Preis höchstens
+            <select id="f-price">
+              <option value="3">egal</option>
+              <option value="2">€€</option>
+              <option value="1">€</option>
+            </select>
+          </label>
+          <label>Fußweg höchstens
+            <select id="f-walk">
+              <option value="">egal</option>
+              <option value="5">5 Minuten</option>
+              <option value="10">10 Minuten</option>
+              <option value="15">15 Minuten</option>
+            </select>
+          </label>
+          <label class="check"><input id="f-veg" type="checkbox" /> nur mit vegetarischer Auswahl</label>
+          <p id="f-info" class="muted"></p>
+          <div id="f-excluded" class="muted small"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Restaurants -->
+    <section id="tab-liste" class="tab-page hidden">
+      <div class="row-between">
+        <h2>Restaurants</h2>
+        <button id="add-restaurant" class="btn primary">+ Restaurant eintragen</button>
+      </div>
+      <input id="search" type="search" placeholder="Suchen …" />
+      <div id="restaurant-list" class="list"></div>
+    </section>
+
+    <!-- Verlauf -->
+    <section id="tab-verlauf" class="tab-page hidden">
+      <h2>Verlauf</h2>
+      <div id="history" class="list"></div>
+      <h2>Am häufigsten</h2>
+      <div id="stats" class="list"></div>
+    </section>
+
+    <!-- Admin -->
+    <section id="tab-admin" class="tab-page hidden">
+      <h2>Kollegen freigeben</h2>
+      <p class="muted">Nur Adressen auf dieser Liste können sich anmelden.</p>
+      <form id="member-form" class="card inline-form">
+        <input id="m-email" type="email" required placeholder="E-Mail-Adresse" />
+        <input id="m-name" type="text" placeholder="Name (optional)" />
+        <label class="check"><input id="m-admin" type="checkbox" /> Admin</label>
+        <button class="btn primary" type="submit">Freigeben</button>
+      </form>
+      <p id="member-msg" class="msg"></p>
+      <div id="members" class="list"></div>
+    </section>
+  </div>
+
+  <!-- Formular Restaurant -->
+  <dialog id="dlg">
+    <form id="r-form" method="dialog">
+      <h2 id="dlg-title">Restaurant</h2>
+      <input type="hidden" id="r-id" />
+      <label>Name<input id="r-name" required maxlength="80" /></label>
+      <label>Küche<input id="r-cuisine" list="cuisine-list" maxlength="40" placeholder="z. B. Italienisch, Asiatisch, Döner" /></label>
+      <datalist id="cuisine-list"></datalist>
+      <div class="two">
+        <label>Preis
+          <select id="r-price">
+            <option value="">–</option>
+            <option value="1">€</option>
+            <option value="2">€€</option>
+            <option value="3">€€€</option>
+          </select>
+        </label>
+        <label>Fußweg (Minuten)<input id="r-walk" type="number" min="0" max="120" /></label>
+      </div>
+      <label class="check"><input id="r-veg" type="checkbox" /> vegetarische Auswahl</label>
+      <label>Adresse<input id="r-address" maxlength="120" /></label>
+      <label>Link (Speisekarte, Webseite)<input id="r-url" type="url" maxlength="300" /></label>
+      <label>Notizen<textarea id="r-notes" rows="2" maxlength="300" placeholder="z. B. Mittagstisch bis 14 Uhr, montags zu"></textarea></label>
+      <label class="check"><input id="r-active" type="checkbox" checked /> kommt ins Glücksrad</label>
+      <p id="r-msg" class="msg"></p>
+      <div class="row-between">
+        <button type="button" id="r-delete" class="btn danger admin-only hidden">Löschen</button>
+        <span class="spacer"></span>
+        <button type="button" id="r-cancel" class="btn ghost">Abbrechen</button>
+        <button type="submit" class="btn primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
