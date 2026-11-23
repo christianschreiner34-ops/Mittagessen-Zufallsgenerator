@@ -89,6 +89,8 @@ async function start(session) {
   state.admin = me.is_admin;
   document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("hidden", !state.admin));
   renderAll();
+  // Das Rad erst neu zeichnen, wenn die Schrift geladen ist
+  document.fonts?.ready.then(() => renderWheel());
 }
 
 // ---------- Daten ----------
@@ -144,7 +146,7 @@ function candidates() {
   const cuisine = $("f-cuisine").value;
   const maxPrice = Number($("f-price").value);
   const maxWalk = $("f-walk").value ? Number($("f-walk").value) : null;
-  const veg = $("f-veg").checked;
+  const veg = $("f-veg").value === "1";
   const list = state.restaurants.filter(
     (r) =>
       r.active &&
@@ -163,7 +165,7 @@ function renderCuisineOptions() {
   const cuisines = [...new Set(state.restaurants.map((r) => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
   const sel = $("f-cuisine");
   const current = sel.value;
-  sel.innerHTML = '<option value="">alle</option>' + cuisines.map((c) => `<option>${esc(c)}</option>`).join("");
+  sel.innerHTML = '<option value="">jede Küche</option>' + cuisines.map((c) => `<option value="${esc(c)}">nur ${esc(c)}</option>`).join("");
   sel.value = cuisines.includes(current) ? current : "";
   $("cuisine-list").innerHTML = cuisines.map((c) => `<option value="${esc(c)}">`).join("");
 }
@@ -172,96 +174,134 @@ function renderWheel() {
   const { list, exclude } = candidates();
   drawWheel(list);
   const active = state.restaurants.filter((r) => r.active).length;
-  $("f-info").textContent = `${list.length} von ${active} Restaurants im Rad.`;
+  const names = [...exclude.keys()].map((id) => state.restaurants.find((x) => x.id === id)?.name).filter(Boolean);
+  let info = `${list.length} von ${active} Restaurants sind im Rad.`;
+  if (names.length) info += ` Draußen: ${names.join(", ")}.`;
+  $("f-info").textContent = info;
   $("spin").disabled = list.length === 0 || state.spinning;
-  const names = [...exclude.entries()].map(([id, day]) => {
-    const r = state.restaurants.find((x) => x.id === id);
-    return r ? `${r.name} (${formatDate(day)})` : null;
-  }).filter(Boolean);
-  $("f-excluded").textContent = names.length ? "Ausgeschlossen: " + names.join(", ") : "";
 }
 
-function drawWheel(list) {
+// Farben des Rads: Trollingerrot und Weiß im Wechsel, wie ein Jahrmarktrad.
+const darkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+const WHEEL = { red: "#8c1c2c", white: "#fbfaf8", dark: "#231d1b", rim: darkMode ? "#3d322d" : "#231d1b", bulbOn: "#ffd66b", bulbOff: "#5a4a3c" };
+const BULBS = 28;
+
+function drawWheel(list, bulbPhase = -1) {
   const c = $("wheel");
   const ctx = c.getContext("2d");
   const size = c.width;
-  const r = size / 2 - 6;
+  const R = size / 2;
+  const rimW = 34;
+  const r = R - rimW;
   ctx.clearRect(0, 0, size, size);
   ctx.save();
-  ctx.translate(size / 2, size / 2);
+  ctx.translate(R, R);
+
+  // Rand mit Glühbirnen
+  ctx.beginPath();
+  ctx.arc(0, 0, R - 2, 0, Math.PI * 2);
+  ctx.fillStyle = WHEEL.rim;
+  ctx.fill();
+  for (let i = 0; i < BULBS; i++) {
+    const a = (i / BULBS) * Math.PI * 2 - Math.PI / 2;
+    const lit = bulbPhase < 0 ? true : (i + bulbPhase) % 3 === 0;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * (R - rimW / 2 - 1), Math.sin(a) * (R - rimW / 2 - 1), 7, 0, Math.PI * 2);
+    ctx.fillStyle = lit ? WHEEL.bulbOn : WHEEL.bulbOff;
+    ctx.fill();
+  }
 
   if (list.length === 0) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = "#ccc";
+    ctx.fillStyle = WHEEL.white;
     ctx.fill();
-    ctx.fillStyle = "#333";
-    ctx.font = "600 22px system-ui";
+    ctx.fillStyle = WHEEL.dark;
+    ctx.font = "600 30px 'Barlow Semi Condensed', sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(state.restaurants.length ? "Nichts passt zu den Filtern" : "Noch keine Restaurants", 0, 8);
+    ctx.fillText(state.restaurants.length ? "Nichts passt zu den Filtern" : "Noch keine Restaurants", 0, 10);
     ctx.restore();
     return;
   }
 
-  const seg = (Math.PI * 2) / list.length;
+  const n = list.length;
+  const seg = (Math.PI * 2) / n;
   list.forEach((rest, i) => {
     const a0 = state.rotation + i * seg;
+    // bei ungerader Anzahl wäre die Naht rot an rot, deshalb das letzte Feld dunkel
+    let fill = i % 2 === 0 ? WHEEL.red : WHEEL.white;
+    if (n % 2 === 1 && i === n - 1 && n > 1) fill = WHEEL.dark;
+    const text = fill === WHEEL.white ? WHEEL.red : WHEEL.white;
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.arc(0, 0, r, a0, a0 + seg);
     ctx.closePath();
-    // bei ungerader Anzahl nicht zwei gleiche Farben nebeneinander
-    let color = COLORS[i % COLORS.length];
-    if (i === list.length - 1 && i % COLORS.length === 0 && i > 0) color = COLORS[(i + 3) % COLORS.length];
-    ctx.fillStyle = color;
+    ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.7)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
 
     ctx.save();
     ctx.rotate(a0 + seg / 2);
-    ctx.fillStyle = "#fff";
-    const fontSize = Math.max(13, Math.min(24, 300 / list.length + 8));
-    ctx.font = `600 ${fontSize}px system-ui`;
+    ctx.fillStyle = text;
+    const fontSize = Math.round(Math.max(18, Math.min(38, 420 / n + 6)));
+    ctx.font = `700 ${fontSize}px 'Barlow Semi Condensed', sans-serif`;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     let label = rest.name;
-    while (ctx.measureText(label).width > r - 50 && label.length > 3) label = label.slice(0, -2) + "…";
-    ctx.fillText(label, r - 16, 0);
+    const maxW = r - 70;
+    while (ctx.measureText(label).width > maxW && label.length > 3) label = label.slice(0, -2) + "…";
+    ctx.fillText(label, r - 22, 1);
     ctx.restore();
   });
 
+  // Speichen als feine Linien
+  ctx.strokeStyle = "rgba(35,29,27,.35)";
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < n && n > 1; i++) {
+    const a = state.rotation + i * seg;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    ctx.stroke();
+  }
+
+  // Nabe
   ctx.beginPath();
-  ctx.arc(0, 0, 26, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
+  ctx.arc(0, 0, 40, 0, Math.PI * 2);
+  ctx.fillStyle = WHEEL.rim;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0, 0, 10, 0, Math.PI * 2);
+  ctx.fillStyle = WHEEL.bulbOn;
   ctx.fill();
   ctx.restore();
 }
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 $("spin").addEventListener("click", () => {
   const { list } = candidates();
   if (!list.length || state.spinning) return;
   state.spinning = true;
   $("spin").disabled = true;
+  $("tab-rad").classList.add("is-spinning");
 
   const winner = Math.floor(Math.random() * list.length);
   const seg = (Math.PI * 2) / list.length;
-  const pointer = -Math.PI / 2; // Zeiger oben
+  const pointer = -Math.PI / 2; // Klapper oben
   const jitter = (Math.random() - 0.5) * seg * 0.7;
   const target = pointer - (winner + 0.5) * seg + jitter;
   const start = state.rotation;
   let delta = (target - start) % (Math.PI * 2);
   if (delta < 0) delta += Math.PI * 2;
-  delta += Math.PI * 2 * (5 + Math.floor(Math.random() * 3));
-  const duration = 4500;
+  delta += Math.PI * 2 * (reduceMotion ? 0 : 5 + Math.floor(Math.random() * 3));
+  const duration = reduceMotion ? 1 : 5200;
   const t0 = performance.now();
 
   function frame(now) {
     const t = Math.min(1, (now - t0) / duration);
     const ease = 1 - Math.pow(1 - t, 4);
     state.rotation = start + delta * ease;
-    drawWheel(list);
+    drawWheel(list, t < 1 ? Math.floor(now / 90) % 3 : -1);
     if (t < 1) requestAnimationFrame(frame);
     else finish(list[winner]);
   }
@@ -272,41 +312,57 @@ async function finish(rest) {
   state.rotation %= Math.PI * 2;
   const { data, error } = await db.from("picks").insert({ restaurant_id: rest.id }).select().single();
   state.spinning = false;
+  $("tab-rad").classList.remove("is-spinning");
   if (error) {
-    alert("Ziehung konnte nicht gespeichert werden: " + error.message);
-  } else {
-    state.picks.unshift(data);
+    $("verdict-kicker").textContent = "Die Ziehung ließ sich nicht speichern. Bitte noch mal drehen.";
+    $("spin").disabled = false;
+    return;
   }
+  state.picks.unshift(data);
   renderToday(true);
   renderWheel();
   renderHistory();
 }
 
+function facts(r) {
+  const parts = [];
+  if (r.cuisine) parts.push(r.cuisine);
+  if (r.price) parts.push({ 1: "günstig", 2: "mittel", 3: "eher teuer" }[r.price]);
+  if (r.walk_minutes != null) parts.push(`${r.walk_minutes} Minuten zu Fuß`);
+  if (r.vegetarian) parts.push("mit Veggie-Auswahl");
+  return parts.length ? parts.join(", ") + "." : "";
+}
+
 function renderToday(fresh = false) {
   const today = todayBerlin();
   const pick = state.picks.find((p) => p.pick_date === today);
-  const box = $("today");
-  if (!pick) {
-    box.classList.add("hidden");
-    $("spin").textContent = "Drehen";
+  const r = pick && state.restaurants.find((x) => x.id === pick.restaurant_id);
+  const name = $("verdict-name");
+  if (!r) {
+    $("verdict-kicker").textContent = "Heute noch nicht gedreht.";
+    name.textContent = "Wohin geht's?";
+    name.classList.remove("decided");
+    $("verdict-facts").textContent = "";
+    $("verdict-links").innerHTML = "";
+    $("spin").textContent = "Rad drehen";
     return;
   }
-  const r = state.restaurants.find((x) => x.id === pick.restaurant_id);
-  if (!r) return box.classList.add("hidden");
-  const maps = r.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + " " + r.address)}` : null;
   const count = state.picks.filter((p) => p.pick_date === today).length;
-  box.innerHTML = `
-    <div class="muted small">${fresh ? "Das Rad hat entschieden" : "Heute geht's zu"}${count > 1 ? ` (${count}. Versuch)` : ""}</div>
-    <div class="name">${esc(r.name)}</div>
-    <div class="muted">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min. zu Fuß" : null].filter(Boolean).map(esc).join(" · ")}</div>
-    ${r.notes ? `<div class="small">${esc(r.notes)}</div>` : ""}
-    <div class="small">
-      ${maps ? `<a href="${maps}" target="_blank" rel="noopener">Route</a>` : ""}
-      ${r.url ? ` · <a href="${esc(r.url)}" target="_blank" rel="noopener">Webseite</a>` : ""}
-      · gedreht von ${esc(nameOf(pick.picked_by))}
-    </div>`;
-  box.classList.remove("hidden");
-  $("spin").textContent = "Nochmal drehen";
+  const who = nameOf(pick.picked_by);
+  $("verdict-kicker").textContent = count > 1 ? `Heute geht's zu (${count}. Dreh, von ${who})` : `Heute geht's zu (gedreht von ${who})`;
+  name.textContent = r.name;
+  name.classList.add("decided");
+  if (fresh && !reduceMotion) {
+    name.classList.remove("reveal");
+    void name.offsetWidth;
+    name.classList.add("reveal");
+  }
+  $("verdict-facts").textContent = [facts(r), r.notes].filter(Boolean).join(" ");
+  const links = [];
+  if (r.address) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + " " + r.address)}" target="_blank" rel="noopener">Route in Google Maps</a>`);
+  if (r.url) links.push(`<a href="${esc(r.url)}" target="_blank" rel="noopener">Speisekarte</a>`);
+  $("verdict-links").innerHTML = links.join(" oder ");
+  $("spin").textContent = "Noch mal drehen";
 }
 
 // ---------- Restaurantliste ----------

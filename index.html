@@ -4,7 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mittagsrad</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23e8590c'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='white' stroke-width='5'/></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%238c1c2c'/><path d='M50 4v92M4 50h92M17 17l66 66M83 17L17 83' stroke='white' stroke-width='5'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -23,7 +26,7 @@
   <!-- App -->
   <div id="view-app" class="hidden">
     <header class="topbar">
-      <strong>Mittagsrad</strong>
+      <span class="brand">Mittagsrad</span>
       <nav id="tabs">
         <button data-tab="rad" class="tab active">Glücksrad</button>
         <button data-tab="liste" class="tab">Restaurants</button>
@@ -34,46 +37,48 @@
     </header>
 
     <!-- Glücksrad -->
-    <section id="tab-rad" class="tab-page">
-      <div id="today" class="card today hidden"></div>
-      <div class="rad-layout">
+    <section id="tab-rad" class="tab-page rad">
+      <div class="stage">
         <div class="wheel-wrap">
-          <div class="pointer"></div>
-          <canvas id="wheel" width="560" height="560"></canvas>
-          <button id="spin" class="btn primary big">Drehen</button>
+          <div class="flapper" aria-hidden="true"></div>
+          <canvas id="wheel" width="720" height="720" aria-label="Glücksrad"></canvas>
         </div>
-        <div class="card filters">
-          <h2>Was kommt ins Rad?</h2>
-          <label>Ausschließen, was es zuletzt gab
-            <select id="f-exclude">
-              <option value="0">nichts ausschließen</option>
-              <option value="1" selected>letzter Essenstag (gestern)</option>
-              <option value="2">letzte 2 Essenstage</option>
-              <option value="3">letzte 3 Essenstage</option>
-              <option value="5">letzte 5 Essenstage</option>
-            </select>
-          </label>
-          <label>Küche
-            <select id="f-cuisine"><option value="">alle</option></select>
-          </label>
-          <label>Preis höchstens
-            <select id="f-price">
-              <option value="3">egal</option>
-              <option value="2">€€</option>
-              <option value="1">€</option>
-            </select>
-          </label>
-          <label>Fußweg höchstens
-            <select id="f-walk">
-              <option value="">egal</option>
-              <option value="5">5 Minuten</option>
-              <option value="10">10 Minuten</option>
-              <option value="15">15 Minuten</option>
-            </select>
-          </label>
-          <label class="check"><input id="f-veg" type="checkbox" /> nur mit vegetarischer Auswahl</label>
-          <p id="f-info" class="muted"></p>
-          <div id="f-excluded" class="muted small"></div>
+
+        <div class="verdict">
+          <p id="verdict-kicker" class="kicker">Heute noch nicht gedreht.</p>
+          <h1 id="verdict-name" class="verdict-name">Wohin geht's?</h1>
+          <p id="verdict-facts" class="verdict-facts"></p>
+          <p id="verdict-links" class="verdict-links"></p>
+          <button id="spin" class="btn spin">Rad drehen</button>
+
+          <p class="mad-libs">
+            Ins Rad kommt
+            <select id="f-cuisine" aria-label="Küche"><option value="">jede Küche</option></select>,
+            <select id="f-price" aria-label="Preis">
+              <option value="3">egal wie teuer</option>
+              <option value="2">höchstens €€</option>
+              <option value="1">nur günstig (€)</option>
+            </select>,
+            <select id="f-walk" aria-label="Fußweg">
+              <option value="">egal wie weit</option>
+              <option value="5">bis 5 Minuten Fußweg</option>
+              <option value="10">bis 10 Minuten Fußweg</option>
+              <option value="15">bis 15 Minuten Fußweg</option>
+            </select>,
+            <select id="f-veg" aria-label="Vegetarisch">
+              <option value="">mit und ohne Veggie</option>
+              <option value="1">nur mit Veggie-Auswahl</option>
+            </select>.
+            Raus bleibt, was es
+            <select id="f-exclude" aria-label="Ausschließen">
+              <option value="0">zuletzt gab: nichts</option>
+              <option value="1" selected>am letzten Essenstag gab</option>
+              <option value="2">an den letzten 2 Essenstagen gab</option>
+              <option value="3">an den letzten 3 Essenstagen gab</option>
+              <option value="5">an den letzten 5 Essenstagen gab</option>
+            </select>.
+          </p>
+          <p id="f-info" class="f-info"></p>
         </div>
       </div>
     </section>
