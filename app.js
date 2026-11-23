@@ -723,6 +723,7 @@ $("join").addEventListener("click", async () => {
   if (!inCrew) state.attendanceWeek.push({ day: t, email: state.email });
   renderCrew();
   renderWheel();
+  renderHistory();
 });
 
 $("me-veg").addEventListener("change", async (e) => {
@@ -920,7 +921,9 @@ function renderWeek(byId) {
   const ws = weekStartBerlin();
   const seen = new Set();
   const days = state.picks
-    .filter((p) => p.pick_date >= ws && !isVetoed(p) && !seen.has(p.pick_date) && seen.add(p.pick_date))
+    .filter((p) => p.pick_date >= ws && !seen.has(p.pick_date) && seen.add(p.pick_date))
+    .map((p) => validPickOn(p.pick_date))
+    .filter(Boolean)
     .reverse();
   const box = $("week");
   if (!days.length) {
