@@ -14,6 +14,8 @@ const state = {
   members: [],
   attendance: [], // E-Mails, die heute dabei sind
   vetoes: [],
+  favorites: [], // {email, restaurant_id}
+  weather: null, // { rainy, text }
   rotation: 0,
   spinning: false,
 };
@@ -113,23 +115,26 @@ async function start(session) {
   renderAll();
   // Das Rad erst neu zeichnen, wenn die Schrift geladen ist
   document.fonts?.ready.then(() => renderWheel());
+  loadWeather();
 }
 
 // ---------- Daten ----------
 
 async function loadAll() {
-  const [r, p, m, a, v] = await Promise.all([
+  const [r, p, m, a, v, f] = await Promise.all([
     db.from("restaurants").select("*").order("name"),
     db.from("picks").select("*").order("created_at", { ascending: false }).limit(300),
     db.from("members").select("*").order("email"),
     db.from("attendance").select("email").eq("day", todayBerlin()),
     db.from("vetoes").select("*").order("created_at", { ascending: false }).limit(300),
+    db.from("favorites").select("email, restaurant_id"),
   ]);
   state.restaurants = r.data || [];
   state.picks = p.data || [];
   state.members = m.data || [];
   state.attendance = (a.data || []).map((x) => x.email);
   state.vetoes = v.data || [];
+  state.favorites = f.data || [];
 }
 
 function renderAll() {
@@ -186,6 +191,7 @@ function candidates() {
       !exclude.has(r.id) &&
       !vetoed.has(r.id) &&
       !(r.closed_days || []).includes(day) &&
+      (!rainBlocks() || r.walk_minutes == null || r.walk_minutes <= RAIN_MAX_WALK) &&
       (!cuisine || r.cuisine === cuisine) &&
       (!r.price || r.price <= maxPrice) &&
       (maxWalk === null || r.walk_minutes == null || r.walk_minutes <= maxWalk) &&
@@ -194,7 +200,7 @@ function candidates() {
   return { list, exclude, closed, vetoed, crewVeg };
 }
 
-["f-exclude", "f-cuisine", "f-price", "f-walk", "f-veg"].forEach((id) => $(id).addEventListener("change", renderWheel));
+["f-exclude", "f-cuisine", "f-price", "f-walk", "f-veg", "f-weight", "rain-ok"].forEach((id) => $(id).addEventListener("change", renderWheel));
 // Segmentierte Auswahl (wie bei iOS) für Filter mit wenigen Möglichkeiten.
 // Das <select> bleibt die Quelle der Wahrheit, die Knöpfe setzen nur seinen Wert.
 document.querySelectorAll("select.seg-source").forEach((sel) => {
@@ -240,6 +246,60 @@ document.querySelectorAll("select.seg-source").forEach((sel) => {
 });
 
 
+// ---------- Felder im Rad: Gewichtung und Überraschungsfeld ----------
+
+const DAY_MS = 86400000;
+function daysSince(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const [ty, tm, td] = todayBerlin().split("-").map(Number);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / DAY_MS);
+}
+
+function lastVisit() {
+  const last = new Map();
+  const days = new Set();
+  for (const p of state.picks) {
+    if (days.has(p.pick_date)) continue;
+    days.add(p.pick_date);
+    const v = validPickOn(p.pick_date);
+    if (v && !last.has(v.restaurant_id)) last.set(v.restaurant_id, v.pick_date);
+  }
+  return last;
+}
+
+// Lieblingsläden zählen: von den Leuten, die heute dabei sind, sonst von allen
+function favCount(id, all = false) {
+  const crew = state.attendance.length && !all ? new Set(state.attendance) : null;
+  return state.favorites.filter((f) => f.restaurant_id === id && (!crew || crew.has(f.email))).length;
+}
+
+// Gewicht: 1 als Grundwert, je Favorit +0,5, und bis zu +1 für Läden, in denen ihr lange nicht wart
+function weightOf(r, last) {
+  const since = last.has(r.id) ? daysSince(last.get(r.id)) : 28;
+  return 1 + 0.5 * favCount(r.id) + Math.min(1, since / 28);
+}
+
+// Überraschungstag: an etwa jedem dritten Tag, für alle gleich (hängt nur am Datum)
+function isSurpriseDay() {
+  const t = todayBerlin();
+  let h = 0;
+  for (const ch of t) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 3 === 0;
+}
+
+function buildSegments(list) {
+  const weighted = $("f-weight").value === "1";
+  const last = lastVisit();
+  const fresh = list.filter((r) => !last.has(r.id));
+  const useSurprise = isSurpriseDay() && fresh.length > 0 && list.length - fresh.length >= 2;
+  const named = useSurprise ? list.filter((r) => last.has(r.id)) : list;
+  const segs = named.map((r) => ({ ids: [r.id], label: r.name, weight: weighted ? weightOf(r, last) : 1, fresh: !last.has(r.id) }));
+  if (useSurprise) segs.push({ ids: fresh.map((r) => r.id), label: "Überraschung", weight: weighted ? 2 : 1, surprise: true });
+  // Überraschungsfeld nicht immer ans Ende, sondern zwischen die anderen
+  if (useSurprise && segs.length > 2) segs.splice(Math.floor(segs.length / 2), 0, segs.pop());
+  return { segs, fresh: fresh.length, useSurprise };
+}
+
 function renderCuisineOptions() {
   const cuisines = [...new Set(state.restaurants.map((r) => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));
   const sel = $("f-cuisine");
@@ -252,7 +312,9 @@ function renderCuisineOptions() {
 function renderWheel() {
   const { list, exclude, closed, vetoed, crewVeg } = candidates();
   const todays = validPickOn(todayBerlin());
-  drawWheel(list, todays?.restaurant_id);
+  const { segs, useSurprise, fresh } = buildSegments(list);
+  state.segs = segs;
+  drawWheel(segs, todays?.restaurant_id);
   const active = state.restaurants.filter((r) => r.active).length;
   const nameList = (ids) => ids.map((id) => state.restaurants.find((x) => x.id === id)?.name).filter(Boolean).join(", ");
   let info = `${list.length} von ${active} Restaurants im Rad.`;
@@ -260,6 +322,8 @@ function renderWheel() {
   if (closed.length) info += ` Heute Ruhetag: ${closed.map((r) => r.name).join(", ")}.`;
   if (vetoed.size) info += ` Heute per Joker abgelehnt: ${nameList([...vetoed])}.`;
   if (crewVeg) info += " Jemand von euch isst vegetarisch, deshalb nur Läden mit vegetarischer Auswahl.";
+  if (rainBlocks()) info += ` Wegen Regen nur Läden bis ${RAIN_MAX_WALK} Minuten.`;
+  if (useSurprise) info += ` Heute ist Überraschungstag: Hinter dem Feld „Überraschung“ steckt einer von ${fresh} Läden, in denen ihr noch nie wart.`;
   $("f-info").textContent = info;
   $("spin").disabled = list.length === 0 || state.spinning;
 }
@@ -270,7 +334,7 @@ const WHEEL = darkMode
   ? { a: "#1f1f1f", b: "#2a2a2a", ink: "#f1f1f1", line: "rgba(241,241,241,.16)", win: "#145a3d", winInk: "#ffffff" }
   : { a: "#ffffff", b: "#e9e9e9", ink: "#232323", line: "rgba(35,35,35,.16)", win: "#0b3d2a", winInk: "#ffffff" };
 
-function drawWheel(list, winnerId = null) {
+function drawWheel(segs, winnerId = null) {
   const c = $("wheel");
   const ctx = c.getContext("2d");
   const size = c.width;
@@ -280,7 +344,7 @@ function drawWheel(list, winnerId = null) {
   ctx.save();
   ctx.translate(R, R);
 
-  if (list.length === 0) {
+  if (segs.length === 0) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fillStyle = WHEEL.a;
@@ -296,13 +360,17 @@ function drawWheel(list, winnerId = null) {
     return;
   }
 
-  const n = list.length;
-  const seg = (Math.PI * 2) / n;
-  list.forEach((rest, i) => {
-    const a0 = state.rotation + i * seg;
-    const isWin = rest.id === winnerId;
+  const n = segs.length;
+  const total = segs.reduce((s, x) => s + x.weight, 0);
+  let acc = 0;
+  segs.forEach((sg, i) => {
+    const seg = (Math.PI * 2 * sg.weight) / total;
+    const a0 = state.rotation + acc;
+    acc += seg;
+    const isWin = winnerId != null && sg.ids.includes(winnerId);
     let fill = i % 2 === 0 ? WHEEL.a : WHEEL.b;
     if (n % 2 === 1 && i === n - 1 && n > 1) fill = darkMode ? "#343434" : "#dcdcdc";
+    if (sg.surprise) fill = darkMode ? "#2f3a34" : "#dfe9e3";
     if (isWin) fill = WHEEL.win;
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -319,11 +387,11 @@ function drawWheel(list, winnerId = null) {
     const flip = Math.cos(mid) < 0;
     ctx.rotate(flip ? mid + Math.PI : mid);
     ctx.fillStyle = isWin ? WHEEL.winInk : WHEEL.ink;
-    const fontSize = Math.round(Math.max(18, Math.min(32, 360 / n + 4)));
+    const fontSize = Math.round(Math.max(16, Math.min(32, 57 * seg + 4)));
     ctx.font = `500 ${fontSize}px 'Host Grotesk', sans-serif`;
     ctx.textAlign = flip ? "left" : "right";
     ctx.textBaseline = "middle";
-    let label = rest.name;
+    let label = sg.fresh ? "Neu: " + sg.label : sg.label;
     const maxW = r - 92;
     while (ctx.measureText(label).width > maxW && label.length > 3) label = label.slice(0, -2) + "…";
     ctx.fillText(label, flip ? -(r - 28) : r - 28, 1);
@@ -355,13 +423,15 @@ function lockFilters(on) {
 // und ob inzwischen schon jemand gedreht hat.
 async function refreshToday() {
   const today = todayBerlin();
-  const [a, m, p, v] = await Promise.all([
+  const [a, m, p, v, f] = await Promise.all([
     db.from("attendance").select("email").eq("day", today),
     db.from("members").select("*").order("email"),
     db.from("picks").select("*").eq("pick_date", today).order("created_at", { ascending: false }),
     db.from("vetoes").select("*").order("created_at", { ascending: false }).limit(300),
+    db.from("favorites").select("email, restaurant_id"),
   ]);
-  if (a.error || m.error || p.error || v.error) return;
+  if (a.error || m.error || p.error || v.error || f.error) return;
+  state.favorites = f.data;
   state.attendance = a.data.map((x) => x.email);
   state.members = m.data;
   state.picks = p.data.concat(state.picks.filter((x) => x.pick_date !== today));
@@ -384,11 +454,19 @@ $("spin").addEventListener("click", async () => {
   }
   lockFilters(true);
 
-  const winner = Math.floor(Math.random() * list.length);
-  const seg = (Math.PI * 2) / list.length;
+  // Feld nach Gewicht ziehen; im Überraschungsfeld dann einen der neuen Läden
+  const { segs } = buildSegments(list);
+  const total = segs.reduce((s, x) => s + x.weight, 0);
+  let roll = Math.random() * total;
+  let winner = 0;
+  while (winner < segs.length - 1 && roll >= segs[winner].weight) roll -= segs[winner++].weight;
+  const before = segs.slice(0, winner).reduce((s, x) => s + x.weight, 0);
+  const segA = (Math.PI * 2 * segs[winner].weight) / total;
+  const startA = (Math.PI * 2 * before) / total;
   const pointer = -Math.PI / 2; // Zeiger oben
-  const jitter = (Math.random() - 0.5) * seg * 0.7;
-  const target = pointer - (winner + 0.5) * seg + jitter;
+  const target = pointer - (startA + segA * (0.15 + Math.random() * 0.7));
+  const ids = segs[winner].ids;
+  const rest = list.find((r) => r.id === ids[Math.floor(Math.random() * ids.length)]);
   const start = state.rotation;
   let delta = (target - start) % (Math.PI * 2);
   if (delta < 0) delta += Math.PI * 2;
@@ -400,16 +478,16 @@ $("spin").addEventListener("click", async () => {
     const t = Math.min(1, (now - t0) / duration);
     const ease = 1 - Math.pow(1 - t, 4);
     state.rotation = start + delta * ease;
-    drawWheel(list);
+    drawWheel(segs);
     if (t < 1) requestAnimationFrame(frame);
-    else finish(list[winner], list);
+    else finish(rest, segs);
   }
   requestAnimationFrame(frame);
 });
 
-async function finish(rest, list) {
+async function finish(rest, segs) {
   state.rotation %= Math.PI * 2;
-  drawWheel(list, rest.id);
+  drawWheel(segs, rest.id);
   const { data, error } = await db.from("picks").insert({ restaurant_id: rest.id }).select().single();
   state.spinning = false;
   lockFilters(false);
@@ -420,7 +498,6 @@ async function finish(rest, list) {
   }
   state.picks.unshift(data);
   renderToday(true);
-  renderWheel();
   renderHistory();
 }
 
@@ -475,6 +552,43 @@ function renderToday(fresh = false) {
   $("verdict-links").innerHTML = links.join(" oder ");
   // Ist entschieden, wird nur noch per Joker neu gedreht
   $("spin").classList.add("hidden");
+}
+
+// ---------- Wetter-Modus (Open-Meteo, kostenlos, ohne Schlüssel) ----------
+
+const OFFICE = { lat: 49.1427, lon: 9.2109 }; // Heilbronn
+const RAIN_MAX_WALK = 7;
+
+function rainBlocks() {
+  return !!state.weather?.rainy && !$("rain-ok").checked;
+}
+
+async function loadWeather() {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${OFFICE.lat}&longitude=${OFFICE.lon}&hourly=temperature_2m,precipitation_probability,precipitation&timezone=Europe%2FBerlin&forecast_days=1`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const h = (await res.json()).hourly;
+    // Mittagszeit: 12 und 13 Uhr
+    const idx = h.time.map((t, i) => [t.slice(11, 13), i]).filter(([hh]) => hh === "12" || hh === "13").map(([, i]) => i);
+    if (!idx.length) return;
+    const prob = Math.max(...idx.map((i) => h.precipitation_probability[i] ?? 0));
+    const mm = Math.max(...idx.map((i) => h.precipitation[i] ?? 0));
+    const temp = Math.round(idx.reduce((s, i) => s + h.temperature_2m[i], 0) / idx.length);
+    const rainy = prob >= 50 || mm >= 0.3;
+    state.weather = {
+      rainy,
+      text: rainy
+        ? `Heute Mittag ${temp} °C und Regen (${prob} %). Läden mit mehr als ${RAIN_MAX_WALK} Minuten Fußweg sind deshalb raus.`
+        : `Heute Mittag ${temp} °C, eher trocken (Regenrisiko ${prob} %).`,
+    };
+    $("weather-text").textContent = state.weather.text;
+    $("rain-ok-wrap").classList.toggle("hidden", !rainy);
+    $("weather").classList.remove("hidden");
+    renderWheel();
+  } catch {
+    // ohne Wetter geht es auch
+  }
 }
 
 // ---------- Veto-Joker: einer pro Person und Woche ----------
@@ -579,12 +693,32 @@ function renderList() {
           <div class="sub">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min." : null, r.address, closedText(r)].filter(Boolean).map(esc).join(" · ")}</div>
           ${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}
         </div>
-        <button class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>
+        <div class="actions">
+          <button class="btn btn--plain btn--small fav" data-fav="${r.id}" aria-pressed="${isMyFav(r.id)}" title="Lieblingsladen: bekommt ein größeres Feld im Rad">${HEART}<span>${favCount(r.id, true) || ""}</span><span class="sr-only">Favorit</span></button>
+          <button class="btn btn--secondary btn--small" data-edit="${r.id}">Bearbeiten</button>
+        </div>
       </div>`
         )
         .join("")
     : `<p class="muted">${state.restaurants.length ? "Nichts gefunden." : "Noch keine Restaurants. Trag das erste ein."}</p>`;
   document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openForm(b.dataset.edit)));
+  document.querySelectorAll("[data-fav]").forEach((b) => b.addEventListener("click", () => toggleFav(b.dataset.fav)));
+}
+
+const HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.6-7 10-7 10z"/></svg>';
+const isMyFav = (id) => state.favorites.some((f) => f.email === state.email && f.restaurant_id === id);
+
+async function toggleFav(id) {
+  const mine = isMyFav(id);
+  const { error } = mine
+    ? await db.from("favorites").delete().eq("email", state.email).eq("restaurant_id", id)
+    : await db.from("favorites").insert({ restaurant_id: id });
+  if (error && error.code !== "23505") return alert("Hat nicht geklappt: " + error.message);
+  state.favorites = mine
+    ? state.favorites.filter((f) => !(f.email === state.email && f.restaurant_id === id))
+    : [...state.favorites, { email: state.email, restaurant_id: id }];
+  renderList();
+  renderWheel();
 }
 
 const DAY_NAMES = { 1: "Mo", 2: "Di", 3: "Mi", 4: "Do", 5: "Fr", 6: "Sa", 7: "So" };

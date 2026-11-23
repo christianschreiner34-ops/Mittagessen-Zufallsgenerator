@@ -131,3 +131,20 @@ create policy "Admin löscht" on public.vetoes for delete to authenticated using
 grant select, insert, delete on public.attendance to authenticated;
 grant select, insert, delete on public.vetoes to authenticated;
 revoke all on public.attendance, public.vetoes from anon;
+
+-- ---------- Paket 2: Favoriten für die Gewichtung (2026-11-23) ----------
+create table if not exists public.favorites (
+  email text not null default public.my_email() references public.members(email) on delete cascade on update cascade,
+  restaurant_id uuid not null references public.restaurants(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (email, restaurant_id)
+);
+alter table public.favorites enable row level security;
+create policy "Mitglieder lesen" on public.favorites for select to authenticated using ((select public.is_member()));
+create policy "Selbst markieren" on public.favorites for insert to authenticated
+  with check ((select public.is_member()) and email = (select public.my_email()));
+create policy "Selbst entfernen" on public.favorites for delete to authenticated
+  using (email = (select public.my_email()));
+create index if not exists favorites_restaurant_idx on public.favorites(restaurant_id);
+grant select, insert, delete on public.favorites to authenticated;
+revoke all on public.favorites from anon;

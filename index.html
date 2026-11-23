@@ -91,13 +91,23 @@
                 <option value="1">Mit Auswahl</option>
               </select>
             </div>
-            <div class="seg-field wide"><span class="seg-label" id="l-walk">Fußweg bis</span>
+            <div class="seg-field"><span class="seg-label" id="l-walk">Fußweg bis (Minuten)</span>
               <select id="f-walk" class="seg-source" aria-labelledby="l-walk">
                 <option value="">Egal</option>
-                <option value="5">5 Min.</option>
-                <option value="10">10 Min.</option>
-                <option value="15">15 Min.</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
               </select>
+            </div>
+            <div class="seg-field"><span class="seg-label" id="l-weight">Felder</span>
+              <select id="f-weight" class="seg-source" aria-labelledby="l-weight">
+                <option value="0">Gleich groß</option>
+                <option value="1" selected>Gewichtet</option>
+              </select>
+            </div>
+            <div id="weather" class="weather wide hidden">
+              <p id="weather-text"></p>
+              <label class="check small hidden" id="rain-ok-wrap"><input id="rain-ok" type="checkbox" /> Trotzdem alle Wege zulassen</label>
             </div>
         </div>
       </div>
