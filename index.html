@@ -58,6 +58,28 @@
             <button id="quick-add" class="btn btn--secondary">Restaurant eintragen</button>
           </div>
           <p id="veto-info" class="f-info"></p>
+          <div id="meet" class="meet hidden">
+            <div class="seg-field"><span class="seg-label" id="l-mode">Heute</span>
+              <select id="meet-mode" class="seg-source" aria-labelledby="l-mode">
+                <option value="0">Wir gehen hin</option>
+                <option value="1">Wir bestellen</option>
+              </select>
+            </div>
+            <div class="meet-row">
+              <label>Uhrzeit<input id="meet-time" type="time" value="12:15" /></label>
+              <label id="meet-place-wrap">Treffpunkt<input id="meet-place" maxlength="80" value="Unten am Eingang" /></label>
+            </div>
+            <div id="orders" class="orders hidden">
+              <p class="seg-label">Bestellliste</p>
+              <div id="order-list"></div>
+              <form id="order-form" class="order-form">
+                <input id="my-order" maxlength="120" placeholder="Was möchtest du?" aria-label="Deine Bestellung" />
+                <button class="btn btn--secondary btn--small" type="submit">Eintragen</button>
+              </form>
+            </div>
+            <button id="notify" type="button" class="btn btn--secondary btn--small">Mail an alle, die dabei sind</button>
+            <p id="meet-msg" class="msg"></p>
+          </div>
           <div id="rate-today" class="rate-today hidden">
             <span>Wie war's?</span>
             <span id="rate-today-btns"></span>
@@ -177,6 +199,7 @@
       <label class="check"><input id="r-veg" type="checkbox" /> vegetarische Auswahl</label>
       <label>Adresse<input id="r-address" maxlength="120" /></label>
       <label>Link (Speisekarte, Webseite)<input id="r-url" type="url" maxlength="300" /></label>
+      <label>Link zur Tageskarte / Mittagstisch<input id="r-menu" type="url" maxlength="300" placeholder="z. B. Seite oder Instagram mit dem Wochenplan" /></label>
       <label>Notizen<textarea id="r-notes" rows="2" maxlength="300" placeholder="z. B. Mittagstisch bis 14 Uhr, montags zu"></textarea></label>
       <fieldset class="days">
         <legend>Ruhetage</legend>

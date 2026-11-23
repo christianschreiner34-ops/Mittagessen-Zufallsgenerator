@@ -305,6 +305,26 @@ fieldset.days label.check { margin: 0; }
 .week .small-note { margin: 12px 0 0; font-size: 14px; color: color-mix(in srgb, var(--accent-ink) 70%, var(--accent)); }
 @media (max-width: 640px) { .week { padding: 22px 20px; } .week-grid { grid-template-columns: 1fr 1fr; } }
 
+/* Treffpunkt, Bestellung */
+.meet { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.2); display: grid; gap: 14px; }
+.meet .seg-label, .meet label { color: color-mix(in srgb, var(--accent-ink) 78%, var(--accent)); font-size: 13px; font-weight: 500; margin: 0; }
+.meet .seg { background: rgba(255,255,255,.12); }
+.meet .seg-btn { color: rgba(255,255,255,.75); }
+.meet .seg-btn[aria-checked="true"] { color: #232323; }
+.meet .seg::before { background: #ffffff; }
+.meet-row { display: grid; grid-template-columns: 160px 1fr; gap: 12px; }
+.meet input { min-height: 44px; font-size: 16px; padding: 8px 12px; background: #ffffff; color: #232323; border-color: transparent; }
+.meet #notify { justify-self: start; }
+.orders { display: grid; gap: 8px; }
+#order-list { font-size: 16px; }
+#order-list p { margin: 0; }
+.order-form { display: flex; gap: 8px; }
+.order-form input { margin: 0; }
+.order-form .btn { flex: none; }
+.verdict.decided .msg.ok { color: #ffffff; }
+.verdict.decided .msg.err { color: #ffd2cc; }
+@media (max-width: 640px) { .meet-row { grid-template-columns: 1fr; } .meet #notify { justify-self: stretch; } }
+
 /* Einstieg: einmal beim Laden, danach steht alles */
 @media (prefers-reduced-motion: no-preference) {
   [data-enter] > * { animation: enter 700ms var(--ease-enter) both; }

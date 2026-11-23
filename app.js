@@ -17,6 +17,8 @@ const state = {
   favorites: [], // {email, restaurant_id}
   ratings: [], // {pick_id, email, thumbs}
   attendanceWeek: [], // {day, email} seit Montag
+  meetup: null, // heutiger Treffpunkt
+  orders: [], // heutige Bestellliste {email, item}
   weather: null, // { rainy, text }
   rotation: 0,
   spinning: false,
@@ -123,7 +125,7 @@ async function start(session) {
 // ---------- Daten ----------
 
 async function loadAll() {
-  const [r, p, m, a, v, f, rt] = await Promise.all([
+  const [r, p, m, a, v, f, rt, mu, o] = await Promise.all([
     db.from("restaurants").select("*").order("name"),
     db.from("picks").select("*").order("created_at", { ascending: false }).limit(300),
     db.from("members").select("*").order("email"),
@@ -131,6 +133,8 @@ async function loadAll() {
     db.from("vetoes").select("*").order("created_at", { ascending: false }).limit(300),
     db.from("favorites").select("email, restaurant_id"),
     db.from("ratings").select("pick_id, email, thumbs").limit(5000),
+    db.from("meetups").select("*").eq("day", todayBerlin()),
+    db.from("order_items").select("email, item").eq("day", todayBerlin()),
   ]);
   state.restaurants = r.data || [];
   state.picks = p.data || [];
@@ -140,6 +144,8 @@ async function loadAll() {
   state.vetoes = v.data || [];
   state.favorites = f.data || [];
   state.ratings = rt.data || [];
+  state.meetup = (mu.data || [])[0] || null;
+  state.orders = o.data || [];
 }
 
 function renderAll() {
@@ -245,6 +251,7 @@ document.querySelectorAll("select.seg-source").forEach((sel) => {
     buttons[i].b.focus();
   });
   sel.addEventListener("change", sync);
+  sel.addEventListener("sync", sync);
   sel.hidden = true;
   sel.insertAdjacentElement("afterend", group);
   sync();
@@ -526,6 +533,8 @@ function renderToday(fresh = false) {
   renderVeto(pick);
   $("friday-hint").classList.toggle("hidden", weekdayBerlin() !== 5);
   $("rate-today").classList.add("hidden");
+  $("meet").classList.toggle("hidden", !r);
+  if (r) renderMeet();
   if (!r) {
     box.classList.remove("decided");
     const lastVeto = state.picks.find((p) => p.pick_date === today && isVetoed(p));
@@ -556,8 +565,9 @@ function renderToday(fresh = false) {
   $("verdict-facts").textContent = [facts(r), r.notes].filter(Boolean).join(" ");
   const links = [];
   if (r.address) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(r.name + " " + r.address)}" target="_blank" rel="noopener">Route in Google Maps</a>`);
+  if (r.menu_url) links.push(`<a href="${esc(r.menu_url)}" target="_blank" rel="noopener">Tageskarte</a>`);
   if (r.url) links.push(`<a href="${esc(r.url)}" target="_blank" rel="noopener">Speisekarte</a>`);
-  $("verdict-links").innerHTML = links.join(" oder ");
+  $("verdict-links").innerHTML = links.join(" · ");
   // Ist entschieden, wird nur noch per Joker neu gedreht
   $("spin").classList.add("hidden");
   // ab 13 Uhr nach dem Essen fragen
@@ -602,6 +612,77 @@ async function loadWeather() {
     // ohne Wetter geht es auch
   }
 }
+
+// ---------- Treffpunkt, Uhrzeit und Bestellliste ----------
+
+function renderMeet() {
+  const m = state.meetup || { meet_time: "12:15", place: "Unten am Eingang", ordering: false };
+  if (document.activeElement !== $("meet-time")) $("meet-time").value = m.meet_time;
+  if (document.activeElement !== $("meet-place")) $("meet-place").value = m.place;
+  if ($("meet-mode").value !== (m.ordering ? "1" : "0")) {
+    $("meet-mode").value = m.ordering ? "1" : "0";
+    $("meet-mode").dispatchEvent(new Event("sync"));
+  }
+  $("meet-place-wrap").classList.toggle("hidden", m.ordering);
+  $("orders").classList.toggle("hidden", !m.ordering);
+  $("notify").textContent = m.notified_at ? "Mail noch mal schicken" : "Mail an alle, die dabei sind";
+  const mine = state.orders.find((x) => x.email === state.email);
+  if (document.activeElement !== $("my-order")) $("my-order").value = mine?.item || "";
+  $("order-list").innerHTML = state.orders.length
+    ? state.orders.map((x) => `<p><strong>${esc(nameOf(x.email))}:</strong> ${esc(x.item)}</p>`).join("")
+    : '<p>Noch niemand hat etwas eingetragen.</p>';
+}
+
+async function saveMeet() {
+  const row = {
+    day: todayBerlin(),
+    meet_time: $("meet-time").value || "12:15",
+    place: $("meet-place").value.trim() || "Unten am Eingang",
+    ordering: $("meet-mode").value === "1",
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await db.from("meetups").upsert(row).select().single();
+  if (error) return setMsg($("meet-msg"), "Speichern fehlgeschlagen: " + error.message, "err");
+  state.meetup = data;
+  setMsg($("meet-msg"), "Gespeichert.", "ok");
+  renderMeet();
+}
+$("meet-time").addEventListener("change", saveMeet);
+$("meet-place").addEventListener("change", saveMeet);
+$("meet-mode").addEventListener("change", saveMeet);
+
+$("order-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const item = $("my-order").value.trim();
+  const { error } = item
+    ? await db.from("order_items").upsert({ day: todayBerlin(), email: state.email, item, updated_at: new Date().toISOString() })
+    : await db.from("order_items").delete().eq("day", todayBerlin()).eq("email", state.email);
+  if (error) return setMsg($("meet-msg"), "Hat nicht geklappt: " + error.message, "err");
+  state.orders = state.orders.filter((x) => x.email !== state.email);
+  if (item) state.orders.push({ email: state.email, item });
+  $("my-order").blur();
+  setMsg($("meet-msg"), item ? "Eingetragen." : "Bestellung gelöscht.", "ok");
+  renderMeet();
+});
+
+$("notify").addEventListener("click", async () => {
+  if (!state.attendance.length) return setMsg($("meet-msg"), "Noch hat niemand „Bin dabei“ getippt.", "err");
+  if (!confirm(`Mail an ${state.attendance.length} ${state.attendance.length === 1 ? "Person" : "Personen"} schicken, die heute dabei ${state.attendance.length === 1 ? "ist" : "sind"}?`)) return;
+  $("notify").disabled = true;
+  setMsg($("meet-msg"), "Wird verschickt …");
+  const { data, error } = await db.functions.invoke("notify-crew", { body: {} });
+  $("notify").disabled = false;
+  if (error) {
+    let text = error.message;
+    try {
+      text = (await error.context.json()).error || text;
+    } catch {}
+    return setMsg($("meet-msg"), text, "err");
+  }
+  setMsg($("meet-msg"), `Mail ist raus an ${data.sent} ${data.sent === 1 ? "Person" : "Personen"}.`, "ok");
+  state.meetup = { ...(state.meetup || {}), notified_at: new Date().toISOString() };
+  renderMeet();
+});
 
 // ---------- Daumen hoch oder runter ----------
 
@@ -756,6 +837,7 @@ function renderList() {
           <div class="title">${esc(r.name)}${r.vegetarian ? '<span class="tag">veggie</span>' : ""}${r.active ? "" : '<span class="tag">pausiert</span>'}</div>
           <div class="sub">${[r.cuisine, PRICE[r.price], r.walk_minutes != null ? r.walk_minutes + " Min." : null, r.address, closedText(r)].filter(Boolean).map(esc).join(" · ")}</div>
           ${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}
+          ${r.menu_url ? `<div class="sub"><a href="${esc(r.menu_url)}" target="_blank" rel="noopener">Tageskarte</a></div>` : ""}
         </div>
         <div class="actions">
           <button class="btn btn--plain btn--small fav" data-fav="${r.id}" aria-pressed="${isMyFav(r.id)}" title="Lieblingsladen: bekommt ein größeres Feld im Rad">${HEART}<span>${favCount(r.id, true) || ""}</span><span class="sr-only">Favorit</span></button>
@@ -805,6 +887,7 @@ function openForm(id) {
   $("r-veg").checked = !!r.vegetarian;
   $("r-address").value = r.address || "";
   $("r-url").value = r.url || "";
+  $("r-menu").value = r.menu_url || "";
   $("r-notes").value = r.notes || "";
   $("r-active").checked = id ? r.active : true;
   document.querySelectorAll("[data-day]").forEach((cb) => (cb.checked = (r.closed_days || []).includes(Number(cb.dataset.day))));
@@ -824,6 +907,7 @@ $("r-form").addEventListener("submit", async (e) => {
     vegetarian: $("r-veg").checked,
     address: $("r-address").value.trim() || null,
     url: $("r-url").value.trim() || null,
+    menu_url: $("r-menu").value.trim() || null,
     notes: $("r-notes").value.trim() || null,
     active: $("r-active").checked,
     closed_days: [...document.querySelectorAll("[data-day]:checked")].map((cb) => Number(cb.dataset.day)),
