@@ -3,13 +3,17 @@
    Palette "Greys and mint": Weiß, Fast-Schwarz, zwei Grautöne; Mint flutet nur
    die Entscheidung (das Gewinnerfeld und die Kachel "Heute geht's zu").
    Schrift: Host Grotesk, Überschriften 500 mit engem Laufweite, Text 400.
-   Radius soft (8/12/20), Buttons solid. */
+   Radius soft (8/12/20), Buttons solid.
+   Danach nach dem Skill apple-design (Apple Human Interface Guidelines) nachgeschärft:
+   Fließtext 17px, Knöpfe als Kapseln, segmentierte Auswahl statt Klappmenüs bei
+   wenigen Möglichkeiten, auf dem Handy eine Tab-Leiste unten in Daumenreichweite,
+   Kopf- und Tab-Leiste leicht durchscheinend (nur diese schwebenden Leisten). */
 
 :root {
   --g-main: #ffffff;
   --g-alt: #f3f3f3;
   --ink: #232323;
-  --muted: #6e6e6e;
+  --muted: #636363;
   --line: rgba(35, 35, 35, .13);
   --accent: #a1ffcb;
   --accent-ink: #232323;
@@ -21,8 +25,11 @@
   --display-weight: 500;
   --track: -0.035em;
 
-  --r-lg: 20px; --r-md: 12px; --r-sm: 8px; --r-btn: 8px;
-  --btn-h: 44px;
+  --r-lg: 24px; --r-md: 14px; --r-sm: 12px; --r-btn: 999px;
+  --btn-h: 48px;
+  --bar: rgba(255, 255, 255, .78);
+  --thumb: #ffffff;
+  --thumb-shadow: 0 1px 2px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.08);
   --ease: cubic-bezier(.2, .8, .2, 1);
   --ease-enter: cubic-bezier(.22, 1, .36, 1);
   --m-in: 150ms; --m-out: 120ms; --m-press: 90ms;
@@ -37,6 +44,9 @@
     --action: #f1f1f1;
     --danger: #ff8a80;
     --ok: #8fe0b0;
+    --bar: rgba(20, 20, 20, .78);
+    --thumb: #3a3a3a;
+    --thumb-shadow: 0 1px 2px rgba(0,0,0,.4);
   }
 }
 
@@ -45,8 +55,8 @@ html, body { margin: 0; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   font-family: var(--font);
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: 17px;
+  line-height: 1.55;
   background: var(--g-main);
   color: var(--ink);
 }
@@ -66,6 +76,7 @@ a:hover { text-decoration-color: var(--ink); }
 /* Formulare */
 label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 16px; }
 label.check { display: flex; gap: 8px; align-items: center; font-weight: 400; font-size: 16px; }
+select[hidden] { display: none; }
 input, select, textarea {
   display: block;
   width: 100%;
@@ -73,7 +84,7 @@ input, select, textarea {
   min-height: 48px;
   padding: 10px 14px;
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 400;
   color: var(--ink);
   background: var(--g-main);
@@ -96,8 +107,8 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
   height: var(--btn-h);
-  padding: 0 24px;
-  font: inherit; font-size: 16px; font-weight: 500;
+  padding: 0 26px;
+  font: inherit; font-size: 17px; font-weight: 500;
   border-radius: var(--r-btn);
   border: 1px solid var(--line);
   background: var(--g-main);
@@ -107,7 +118,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 }
 .btn--primary { background: var(--action); color: var(--g-main); border-color: var(--action); }
 .btn--danger { color: var(--danger); border-color: currentColor; background: transparent; }
-.btn--small { height: 36px; padding: 0 14px; font-size: 14px; }
+.btn--small { height: 36px; padding: 0 16px; font-size: 15px; }
 @media (hover: hover) and (pointer: fine) {
   .btn:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--ink); }
   .btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--action) 86%, var(--g-main)); }
@@ -129,7 +140,9 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
   height: 64px;
   padding: 0 max(24px, calc((100vw - 1280px) / 2));
   border-bottom: 1px solid var(--line);
-  background: var(--g-main);
+  background: var(--bar);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
   position: sticky; top: 0; z-index: 10;
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 18px; letter-spacing: -0.02em; }
@@ -137,14 +150,17 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
   content: ""; width: 20px; height: 20px; border-radius: 50%;
   background: conic-gradient(var(--accent) 0 25%, var(--ink) 0 50%, var(--accent) 0 75%, var(--ink) 0);
 }
-#tabs { display: flex; gap: 4px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+#tabs { display: flex; gap: 2px; padding: 3px; background: var(--g-alt); border-radius: 999px; overflow-x: auto; scrollbar-width: none; }
 .tab {
+  display: inline-flex; align-items: center; gap: 6px;
   font: inherit; font-size: 15px; font-weight: 500; background: none; border: none; color: var(--muted);
-  height: 36px; padding: 0 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
-  transition: color var(--m-in) var(--ease), background-color var(--m-in) var(--ease);
+  height: 34px; padding: 0 16px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  transition: color var(--m-in) var(--ease), background-color var(--m-in) var(--ease), box-shadow var(--m-in) var(--ease);
 }
+.tab-ic { display: none; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .tab:hover { color: var(--ink); }
-.tab.active { color: var(--g-main); background: var(--ink); }
+.tab.active { color: var(--ink); background: var(--thumb); box-shadow: var(--thumb-shadow); }
+.topbar #logout { margin-left: auto; }
 
 .tab-page { max-width: 1280px; margin: 0 auto; padding: 48px 24px 64px; }
 @media (min-width: 1100px) { .tab-page { padding-left: 80px; padding-right: 80px; } }
@@ -164,7 +180,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 .verdict.decided .btn--primary { background: var(--accent-ink); color: var(--accent); border-color: var(--accent-ink); }
 .verdict.decided .btn--secondary { background: transparent; border-color: rgba(35,35,35,.3); color: var(--accent-ink); }
 .verdict.decided a { color: var(--accent-ink); text-decoration-color: rgba(35,35,35,.35); }
-.kicker { margin: 4px 0 12px; font-size: 18px; color: var(--muted); }
+.kicker { margin: 4px 0 12px; font-size: 19px; color: var(--muted); }
 .verdict-name {
   font-size: clamp(40px, 5.2vw, 72px);
   letter-spacing: -0.045em;
@@ -172,20 +188,20 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
   overflow-wrap: anywhere;
   hyphens: auto;
 }
-.verdict-facts { margin: 16px 0 0; font-size: 18px; max-width: 34em; }
-.verdict-links { margin: 4px 0 0; font-size: 16px; }
+.verdict-facts { margin: 16px 0 0; font-size: 19px; max-width: 34em; }
+.verdict-links { margin: 4px 0 0; font-size: 17px; }
 .verdict-links:empty, .verdict-facts:empty { display: none; }
 .verdict .btn-row { margin-top: 32px; }
-.f-info { margin: 20px 0 0; font-size: 14px; color: var(--muted); }
+.f-info { margin: 20px 0 0; font-size: 15px; color: var(--muted); }
 
 .wheel-panel {
   grid-area: wheel; align-self: end;
   background: var(--g-alt);
   border: 1px solid var(--line); border-bottom: 0;
   border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: 32px 32px 0;
+  padding: 28px 32px 0;
 }
-.wheel-wrap { position: relative; max-width: 520px; margin: 0 auto; }
+.wheel-wrap { position: relative; max-width: 460px; margin: 0 auto; }
 #wheel { display: block; width: 100%; height: auto; aspect-ratio: 1; }
 .pointer {
   position: absolute; top: -6px; left: 50%;
@@ -196,16 +212,40 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 }
 .filters {
   grid-area: filters; align-self: start;
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 12px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px;
   background: var(--g-alt);
   border: 1px solid var(--line); border-top: 0;
   border-radius: 0 0 var(--r-lg) var(--r-lg);
   padding: 28px 32px 28px;
 }
-.filters label { grid-column: span 2; }
-.filters label:nth-child(n+4) { grid-column: span 3; }
-.filters label { margin: 0; font-size: 13px; color: var(--muted); }
-.filters select { min-height: 44px; font-size: 15px; padding: 8px 32px 8px 12px; background-position: right 12px center; }
+.filters label, .seg-label { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+.filters .wide { grid-column: 1 / -1; }
+.filters select { min-height: 44px; font-size: 16px; padding: 8px 34px 8px 14px; background-position: right 14px center; }
+
+/* Segmentierte Auswahl: graue Spur, weißer Schieber gleitet zur Wahl */
+.seg-label { display: block; }
+.seg {
+  position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  margin-top: 6px; padding: 3px; min-height: 44px;
+  background: color-mix(in srgb, var(--ink) 7%, var(--g-alt)); border-radius: var(--r-sm);
+}
+.seg::before {
+  content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
+  width: calc((100% - 6px) / var(--n));
+  transform: translateX(calc(100% * var(--i, 0)));
+  background: var(--thumb); border-radius: 9px; box-shadow: var(--thumb-shadow);
+  transition: transform 260ms var(--ease-enter);
+}
+.seg-btn {
+  position: relative; z-index: 1;
+  font: inherit; font-size: 15px; font-weight: 500; color: var(--muted);
+  background: none; border: 0; border-radius: 9px; padding: 0 6px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color var(--m-in) var(--ease);
+}
+.seg-btn[aria-checked="true"] { color: var(--ink); }
+.seg-btn:hover { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .seg::before { transition: none; } }
 
 /* Einstieg: einmal beim Laden, danach steht alles */
 @media (prefers-reduced-motion: no-preference) {
@@ -234,7 +274,7 @@ label.check input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-
 }
 .item .main { flex: 1; min-width: 0; }
 .item .title { font-weight: 500; font-size: 18px; }
-.item .sub { color: var(--muted); font-size: 14px; }
+.item .sub { color: var(--muted); font-size: 15px; }
 .item.inactive .title { color: var(--muted); }
 .tag { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 8px; }
 .card { background: var(--g-alt); border-radius: var(--r-md); padding: 24px; }
@@ -254,16 +294,30 @@ dialog::backdrop { background: rgb(20 20 20 / .45); }
 @media (max-width: 960px) {
   .hero { grid-template-columns: 1fr; grid-template-areas: "wheel" "verdict" "filters"; min-height: 0; row-gap: 24px; }
   .wheel-panel { border: 1px solid var(--line); border-radius: var(--r-lg); padding-bottom: 24px; }
-  .filters { border: 1px solid var(--line); border-radius: var(--r-lg); grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .filters label, .filters label:nth-child(n+4) { grid-column: span 1; }
-  .filters label:last-child { grid-column: 1 / -1; }
+  .filters { border: 1px solid var(--line); border-radius: var(--r-lg); }
 }
 @media (max-width: 640px) {
-  .topbar { flex-wrap: wrap; height: auto; padding: 10px 16px; gap: 8px 12px; }
+  /* backdrop-filter würde die fixierte Tab-Leiste an die Kopfzeile binden */
+  .topbar { height: 56px; padding: 0 16px; gap: 12px; background: var(--g-main); -webkit-backdrop-filter: none; backdrop-filter: none; }
   .brand { flex: 1; }
-  #tabs { order: 3; flex-basis: 100%; }
-  .tab { height: 44px; }
-  .tab-page { padding: 24px 16px 48px; }
+  /* Tab-Leiste unten, in Daumenreichweite */
+  #tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; gap: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    border-radius: 0; border-top: 1px solid var(--line);
+    background: var(--bar);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+  .tab {
+    flex: 1; flex-direction: column; gap: 2px; justify-content: center;
+    height: 54px; padding: 0 4px; border-radius: 12px; font-size: 11px; font-weight: 500;
+  }
+  .tab.active { background: none; box-shadow: none; color: var(--ink); }
+  .tab-ic { display: block; }
+  .tab.active .tab-ic { fill: var(--accent); }
+  .tab-page { padding: 20px 16px calc(96px + env(safe-area-inset-bottom)); }
+  .filters { grid-template-columns: 1fr; }
   .wheel-panel { padding: 20px 16px 16px; }
   .filters { padding: 20px 16px; }
   .verdict { padding: 24px 20px; }

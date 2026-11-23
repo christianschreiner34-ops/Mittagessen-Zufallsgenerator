@@ -160,6 +160,50 @@ function candidates() {
 }
 
 ["f-exclude", "f-cuisine", "f-price", "f-walk", "f-veg"].forEach((id) => $(id).addEventListener("change", renderWheel));
+// Segmentierte Auswahl (wie bei iOS) für Filter mit wenigen Möglichkeiten.
+// Das <select> bleibt die Quelle der Wahrheit, die Knöpfe setzen nur seinen Wert.
+document.querySelectorAll("select.seg-source").forEach((sel) => {
+  const group = document.createElement("div");
+  group.className = "seg";
+  group.setAttribute("role", "radiogroup");
+  group.setAttribute("aria-labelledby", sel.getAttribute("aria-labelledby"));
+  const buttons = [...sel.options].map((opt) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "seg-btn";
+    b.setAttribute("role", "radio");
+    b.textContent = opt.textContent;
+    b.addEventListener("click", () => {
+      if (sel.value === opt.value) return;
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event("change"));
+    });
+    group.appendChild(b);
+    return { b, opt };
+  });
+  const sync = () => {
+    buttons.forEach(({ b, opt }, i) => {
+      const on = opt.value === sel.value;
+      b.setAttribute("aria-checked", on);
+      b.tabIndex = on ? 0 : -1;
+      if (on) group.style.setProperty("--i", i);
+    });
+  };
+  group.style.setProperty("--n", buttons.length);
+  group.addEventListener("keydown", (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const i = (sel.selectedIndex + step + buttons.length) % buttons.length;
+    buttons[i].b.click();
+    buttons[i].b.focus();
+  });
+  sel.addEventListener("change", sync);
+  sel.hidden = true;
+  sel.insertAdjacentElement("afterend", group);
+  sync();
+});
+
 
 function renderCuisineOptions() {
   const cuisines = [...new Set(state.restaurants.map((r) => r.cuisine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "de"));

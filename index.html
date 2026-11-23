@@ -28,10 +28,10 @@
     <header class="topbar">
       <span class="brand">Mittagsrad</span>
       <nav id="tabs">
-        <button data-tab="rad" class="tab active">Glücksrad</button>
-        <button data-tab="liste" class="tab">Restaurants</button>
-        <button data-tab="verlauf" class="tab">Verlauf</button>
-        <button data-tab="admin" class="tab admin-only hidden">Kollegen</button>
+        <button data-tab="rad" class="tab active"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg><span>Glücksrad</span></button>
+        <button data-tab="liste" class="tab"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Restaurants</span></button>
+        <button data-tab="verlauf" class="tab"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Verlauf</span></button>
+        <button data-tab="admin" class="tab admin-only hidden"><svg class="tab-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .7 3.2 2.5 3.6 5.2"/></svg><span>Kollegen</span></button>
       </nav>
       <button id="logout" class="btn btn--secondary btn--small">Abmelden</button>
     </header>
@@ -60,36 +60,36 @@
         </div>
         <div class="filters">
             <label>Küche<select id="f-cuisine"><option value="">Alle</option></select></label>
-            <label>Preis
-              <select id="f-price">
+            <label>Zuletzt gegessen
+              <select id="f-exclude">
+                <option value="0">Alle zulassen</option>
+                <option value="1" selected>Letzten Tag raus</option>
+                <option value="2">Letzte 2 Tage raus</option>
+                <option value="3">Letzte 3 Tage raus</option>
+                <option value="5">Letzte 5 Tage raus</option>
+              </select>
+            </label>
+            <div class="seg-field"><span class="seg-label" id="l-price">Preis</span>
+              <select id="f-price" class="seg-source" aria-labelledby="l-price">
                 <option value="3">Egal</option>
                 <option value="2">Bis €€</option>
                 <option value="1">Nur €</option>
               </select>
-            </label>
-            <label>Fußweg
-              <select id="f-walk">
+            </div>
+            <div class="seg-field"><span class="seg-label" id="l-veg">Vegetarisch</span>
+              <select id="f-veg" class="seg-source" aria-labelledby="l-veg">
                 <option value="">Egal</option>
-                <option value="5">Bis 5 Min.</option>
-                <option value="10">Bis 10 Min.</option>
-                <option value="15">Bis 15 Min.</option>
+                <option value="1">Mit Auswahl</option>
               </select>
-            </label>
-            <label>Vegetarisch
-              <select id="f-veg">
+            </div>
+            <div class="seg-field wide"><span class="seg-label" id="l-walk">Fußweg bis</span>
+              <select id="f-walk" class="seg-source" aria-labelledby="l-walk">
                 <option value="">Egal</option>
-                <option value="1">Nur mit Auswahl</option>
+                <option value="5">5 Min.</option>
+                <option value="10">10 Min.</option>
+                <option value="15">15 Min.</option>
               </select>
-            </label>
-            <label>Zuletzt gegessen
-              <select id="f-exclude">
-                <option value="0">Alle zulassen</option>
-                <option value="1" selected>1 Tag raus</option>
-                <option value="2">2 Tage raus</option>
-                <option value="3">3 Tage raus</option>
-                <option value="5">5 Tage raus</option>
-              </select>
-            </label>
+            </div>
         </div>
       </div>
     </section>
