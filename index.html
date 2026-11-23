@@ -18,8 +18,15 @@
     <form id="login-form" class="card">
       <label for="login-email">Deine E-Mail-Adresse</label>
       <input id="login-email" type="email" required autocomplete="email" placeholder="vorname.nachname@…" />
-      <button class="btn btn--primary" type="submit">Anmeldelink schicken</button>
+      <button class="btn btn--primary" type="submit">Anmeldecode schicken</button>
       <p id="login-msg" class="msg"></p>
+    </form>
+    <form id="code-form" class="card hidden">
+      <label for="login-code">Code aus der Mail</label>
+      <input id="login-code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required placeholder="123456" />
+      <button class="btn btn--primary" type="submit">Anmelden</button>
+      <button class="btn btn--plain" type="button" id="code-back">Andere Adresse oder neuen Code</button>
+      <p id="code-msg" class="msg"></p>
     </form>
   </main>
 
