@@ -893,7 +893,7 @@ function listItems() {
 }
 
 function renderChips() {
-  const counts = {};
+  const counts = Object.create(null); // ohne Prototyp, damit Kategorien wie „constructor“ nichts kaputt machen
   state.restaurants.forEach((r) => (counts[catOf(r)] = (counts[catOf(r)] || 0) + 1));
   const cats = Object.keys(counts).sort((a, b) => (a === NO_CAT) - (b === NO_CAT) || a.localeCompare(b, "de"));
   if (listCat && !counts[listCat]) listCat = "";
@@ -930,7 +930,7 @@ function renderList() {
   renderChips();
   const items = listItems();
   // Gruppiert nach Kategorie, solange nicht schon eine Kategorie gewählt ist
-  const groups = {};
+  const groups = Object.create(null); // ohne Prototyp, damit Kategorien wie „constructor“ nichts kaputt machen
   items.forEach((r) => (groups[catOf(r)] ||= []).push(r));
   const names = Object.keys(groups).sort((a, b) => (a === NO_CAT) - (b === NO_CAT) || a.localeCompare(b, "de"));
   const grouped = !listCat && names.length > 1;
@@ -1129,14 +1129,17 @@ let backfilling = false;
 async function backfillCoords(list) {
   if (backfilling || !list.length) return;
   backfilling = true;
-  for (const r of list) {
-    const hit = await geocode(r.address);
+  for (const item of list) {
+    const addr = item.address;
+    const hit = await geocode(addr);
+    // Während der Suche kann jemand die Adresse geändert haben: dann nichts überschreiben.
+    const cur = state.restaurants.find((x) => x.id === item.id);
+    if (!cur || cur.address !== addr || cur.lat != null) continue;
     if (hit) {
-      const { error } = await db.from("restaurants").update(hit).eq("id", r.id);
-      if (!error) {
-        Object.assign(r, hit);
-      } else geoTried.add(r.id);
-    } else geoTried.add(r.id);
+      const { data, error } = await db.from("restaurants").update(hit).eq("id", cur.id).eq("address", addr).is("lat", null).select();
+      if (!error && data?.length) Object.assign(cur, hit);
+      else if (error) geoTried.add(cur.id);
+    } else geoTried.add(cur.id);
     await new Promise((ok) => setTimeout(ok, 1100));
   }
   backfilling = false;
