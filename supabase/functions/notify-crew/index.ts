@@ -72,11 +72,25 @@ Deno.serve(async (req) => {
   if (!claimed) return json(429, { error: "Die Mail ging gerade erst raus. Bitte frühestens in 10 Minuten noch mal." });
   const m = claimed;
 
+  const site = "https://mittagsrad.vercel.app";
+  const dabei = to.map((e) => names.get(e) ?? e);
   const lines = m.ordering
     ? [`Heute wird bei ${rest?.name} bestellt.`, `Bestellt wird um ${m.meet_time} Uhr. Tragt bis dahin auf der Seite ein, was ihr möchtet.`]
     : [`Heute geht's zu ${rest?.name}${rest?.address ? ` (${rest.address})` : ""}.`, `Treffpunkt: ${m.meet_time} Uhr, ${m.place}.`];
   if (rest?.menu_url) lines.push(`Tageskarte: ${rest.menu_url}`);
-  lines.push("", `Dabei: ${to.map((e) => names.get(e) ?? e).join(", ")}`, "", `Geschickt von ${names.get(me)} über https://mittagsrad.vercel.app`);
+  lines.push("", `Dabei: ${dabei.join(", ")}`, "", `Geschickt von ${names.get(me)} über ${site}`);
+
+  const html = mailHtml({
+    ordering: !!m.ordering,
+    name: rest?.name ?? "",
+    address: rest?.address ?? "",
+    time: m.meet_time ?? "",
+    place: m.place ?? "",
+    menu: safeUrl(rest?.menu_url),
+    dabei,
+    from: names.get(me) ?? me,
+    site,
+  });
 
   const transport = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } });
   try {
@@ -87,6 +101,7 @@ Deno.serve(async (req) => {
       replyTo: me,
       subject: m.ordering ? `Mittagessen: Bestellung bei ${rest?.name} um ${m.meet_time}` : `Mittagessen: ${rest?.name} um ${m.meet_time}`,
       text: lines.join("\n"),
+      html,
     });
   } catch (e) {
     // Sendeplatz wieder freigeben, damit man es gleich noch mal versuchen kann.
@@ -96,3 +111,69 @@ Deno.serve(async (req) => {
 
   return json(200, { sent: to.length, meetup: m });
 });
+
+// ---------- HTML-Mail ----------
+// Tabellen und Inline-Stile, damit es auch in Outlook ordentlich aussieht.
+const esc = (v: unknown) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const safeUrl = (u?: string | null) => (u && /^https?:\/\//i.test(u) ? u : "");
+
+const FONT = "'Host Grotesk', Arial, Helvetica, sans-serif";
+const GREEN = "#0b3d2a";
+
+function row(label: string, value: string) {
+  return `<tr>
+    <td style="padding:10px 0;border-top:1px solid #e6ebe8;font:13px/1.4 ${FONT};color:#5f6f67;width:110px;vertical-align:top;">${label}</td>
+    <td style="padding:10px 0;border-top:1px solid #e6ebe8;font:15px/1.4 ${FONT};color:#16231d;vertical-align:top;">${value}</td>
+  </tr>`;
+}
+
+function mailHtml(d: {
+  ordering: boolean; name: string; address: string; time: string; place: string;
+  menu: string; dabei: string[]; from: string; site: string;
+}) {
+  const intro = d.ordering ? "Heute wird bestellt bei" : "Heute geht's zu";
+  const rows = d.ordering
+    ? row("Bestellung", `um ${esc(d.time)} Uhr`) +
+      row("So geht's", "Tragt bis dahin auf der Seite ein, was ihr möchtet.")
+    : row("Treffpunkt", `${esc(d.time)} Uhr, ${esc(d.place)}`) +
+      (d.address ? row("Adresse", esc(d.address)) : "");
+  const menu = d.menu
+    ? row("Tageskarte", `<a href="${esc(d.menu)}" style="color:${GREEN};text-decoration:underline;">ansehen</a>`)
+    : "";
+  const button = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr>
+    <td bgcolor="${GREEN}" style="border-radius:8px;">
+      <a href="${esc(d.site)}" style="display:inline-block;padding:12px 22px;font:600 15px/1 ${FONT};color:#ffffff;text-decoration:none;border-radius:8px;">${d.ordering ? "Bestellung eintragen" : "Zum Mittagsrad"}</a>
+    </td></tr></table>`;
+
+  return `<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only"><title>Mittagsrad</title>
+<link href="https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body style="margin:0;padding:0;background:#f3f5f4;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f5f4"><tr><td align="center" style="padding:32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+    <tr><td style="padding:0 4px 14px;font:700 15px/1 ${FONT};color:${GREEN};letter-spacing:0.2px;">Mittagsrad</td></tr>
+    <tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid #e1e7e4;border-radius:12px;overflow:hidden;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr><td bgcolor="${GREEN}" style="background:${GREEN};padding:26px 28px;border-radius:12px 12px 0 0;">
+          <div style="font:14px/1.4 ${FONT};color:#b9d3c6;">${intro}</div>
+          <div style="font:700 26px/1.25 ${FONT};color:#ffffff;margin-top:4px;">${esc(d.name)}</div>
+        </td></tr>
+        <tr><td style="padding:12px 28px 28px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            ${rows}${menu}
+            ${row("Dabei", esc(d.dabei.join(", ")))}
+          </table>
+          ${button}
+        </td></tr>
+      </table>
+    </td></tr>
+    <tr><td style="padding:16px 4px 0;font:12px/1.5 ${FONT};color:#7a8a82;">
+      Geschickt von ${esc(d.from)} über das Mittagsrad. Antworten gehen direkt an ${esc(d.from)}.
+    </td></tr>
+  </table>
+</td></tr></table>
+</body></html>`;
+}
